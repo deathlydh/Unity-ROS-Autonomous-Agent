@@ -1,0 +1,41 @@
+{
+    "ball_max_distance": {
+        "lesson_num": 0
+    },
+    "ball_max_offset": {
+        "lesson_num": 0
+    },
+    "ball_mass": {
+        "lesson_num": 0
+    },
+    "ball_scale": {
+        "lesson_num": 0
+    },
+    "GFSX_Brain": {
+        "checkpoints": [
+            {
+                "steps": 219081,
+                "file_path": "results\\build_runv1\\GFSX_Brain\\GFSX_Brain-219081.onnx",
+                "reward": -1.1439374912799378,
+                "creation_time": 1774968322.9749308,
+                "auxillary_file_paths": [
+                    "results\\build_runv1\\GFSX_Brain\\GFSX_Brain-219081.pt"
+                ]
+            }
+        ],
+        "final_checkpoint": {
+            "steps": 219081,
+            "file_path": "results\\build_runv1\\GFSX_Brain.onnx",
+            "reward": -1.1439374912799378,
+            "creation_time": 1774968322.9749308,
+            "auxillary_file_paths": [
+                "results\\build_runv1\\GFSX_Brain\\GFSX_Brain-219081.pt"
+            ]
+        }
+    },
+    "metadata": {
+        "stats_format_version": "0.3.0",
+        "mlagents_version": "1.1.0",
+        "torch_version": "2.2.2+cu121"
+    }
+}

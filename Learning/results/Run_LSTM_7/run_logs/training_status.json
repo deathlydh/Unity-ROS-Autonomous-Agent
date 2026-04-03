@@ -1,0 +1,116 @@
+{
+    "ball_max_distance": {
+        "lesson_num": 2
+    },
+    "ball_max_offset": {
+        "lesson_num": 2
+    },
+    "GFSX_Brain": {
+        "checkpoints": [
+            {
+                "steps": 41999869,
+                "file_path": "results\\Run_LSTM_7\\GFSX_Brain\\GFSX_Brain-41999869.onnx",
+                "reward": 4.748757597493248,
+                "creation_time": 1774166122.4594605,
+                "auxillary_file_paths": [
+                    "results\\Run_LSTM_7\\GFSX_Brain\\GFSX_Brain-41999869.pt"
+                ]
+            },
+            {
+                "steps": 42999859,
+                "file_path": "results\\Run_LSTM_7\\GFSX_Brain\\GFSX_Brain-42999859.onnx",
+                "reward": 3.9904377151305983,
+                "creation_time": 1774167896.9232635,
+                "auxillary_file_paths": [
+                    "results\\Run_LSTM_7\\GFSX_Brain\\GFSX_Brain-42999859.pt"
+                ]
+            },
+            {
+                "steps": 43999918,
+                "file_path": "results\\Run_LSTM_7\\GFSX_Brain\\GFSX_Brain-43999918.onnx",
+                "reward": 4.480278460065108,
+                "creation_time": 1774169674.6079137,
+                "auxillary_file_paths": [
+                    "results\\Run_LSTM_7\\GFSX_Brain\\GFSX_Brain-43999918.pt"
+                ]
+            },
+            {
+                "steps": 44999888,
+                "file_path": "results\\Run_LSTM_7\\GFSX_Brain\\GFSX_Brain-44999888.onnx",
+                "reward": 4.222200585850354,
+                "creation_time": 1774171452.7309327,
+                "auxillary_file_paths": [
+                    "results\\Run_LSTM_7\\GFSX_Brain\\GFSX_Brain-44999888.pt"
+                ]
+            },
+            {
+                "steps": 45999875,
+                "file_path": "results\\Run_LSTM_7\\GFSX_Brain\\GFSX_Brain-45999875.onnx",
+                "reward": 4.60355008259323,
+                "creation_time": 1774173225.0811415,
+                "auxillary_file_paths": [
+                    "results\\Run_LSTM_7\\GFSX_Brain\\GFSX_Brain-45999875.pt"
+                ]
+            },
+            {
+                "steps": 46999883,
+                "file_path": "results\\Run_LSTM_7\\GFSX_Brain\\GFSX_Brain-46999883.onnx",
+                "reward": 4.047485557469455,
+                "creation_time": 1774175010.9168684,
+                "auxillary_file_paths": [
+                    "results\\Run_LSTM_7\\GFSX_Brain\\GFSX_Brain-46999883.pt"
+                ]
+            },
+            {
+                "steps": 47999829,
+                "file_path": "results\\Run_LSTM_7\\GFSX_Brain\\GFSX_Brain-47999829.onnx",
+                "reward": 4.472865718705901,
+                "creation_time": 1774176782.2791378,
+                "auxillary_file_paths": [
+                    "results\\Run_LSTM_7\\GFSX_Brain\\GFSX_Brain-47999829.pt"
+                ]
+            },
+            {
+                "steps": 48999972,
+                "file_path": "results\\Run_LSTM_7\\GFSX_Brain\\GFSX_Brain-48999972.onnx",
+                "reward": 4.470238812677153,
+                "creation_time": 1774178574.5828598,
+                "auxillary_file_paths": [
+                    "results\\Run_LSTM_7\\GFSX_Brain\\GFSX_Brain-48999972.pt"
+                ]
+            },
+            {
+                "steps": 49999830,
+                "file_path": "results\\Run_LSTM_7\\GFSX_Brain\\GFSX_Brain-49999830.onnx",
+                "reward": 4.391426111633032,
+                "creation_time": 1774180359.70414,
+                "auxillary_file_paths": [
+                    "results\\Run_LSTM_7\\GFSX_Brain\\GFSX_Brain-49999830.pt"
+                ]
+            },
+            {
+                "steps": 50000086,
+                "file_path": "results\\Run_LSTM_7\\GFSX_Brain\\GFSX_Brain-50000086.onnx",
+                "reward": 4.391426111633032,
+                "creation_time": 1774180359.8069112,
+                "auxillary_file_paths": [
+                    "results\\Run_LSTM_7\\GFSX_Brain\\GFSX_Brain-50000086.pt"
+                ]
+            }
+        ],
+        "final_checkpoint": {
+            "steps": 50000086,
+            "file_path": "results\\Run_LSTM_7\\GFSX_Brain.onnx",
+            "reward": 4.391426111633032,
+            "creation_time": 1774180359.8069112,
+            "auxillary_file_paths": [
+                "results\\Run_LSTM_7\\GFSX_Brain\\GFSX_Brain-50000086.pt"
+            ]
+        }
+    },
+    "metadata": {
+        "stats_format_version": "0.3.0",
+        "mlagents_version": "1.1.0",
+        "torch_version": "2.2.2+cu121"
+    }
+}

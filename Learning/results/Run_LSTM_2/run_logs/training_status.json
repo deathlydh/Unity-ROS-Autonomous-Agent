@@ -1,0 +1,56 @@
+{
+    "GFSX_Brain": {
+        "checkpoints": [
+            {
+                "steps": 499766,
+                "file_path": "results\\Run_LSTM_2\\GFSX_Brain\\GFSX_Brain-499766.onnx",
+                "reward": -9.963904003943167,
+                "creation_time": 1774000724.536343,
+                "auxillary_file_paths": [
+                    "results\\Run_LSTM_2\\GFSX_Brain\\GFSX_Brain-499766.pt"
+                ]
+            },
+            {
+                "steps": 999864,
+                "file_path": "results\\Run_LSTM_2\\GFSX_Brain\\GFSX_Brain-999864.onnx",
+                "reward": -7.156152184416608,
+                "creation_time": 1774001475.0759556,
+                "auxillary_file_paths": [
+                    "results\\Run_LSTM_2\\GFSX_Brain\\GFSX_Brain-999864.pt"
+                ]
+            },
+            {
+                "steps": 1499922,
+                "file_path": "results\\Run_LSTM_2\\GFSX_Brain\\GFSX_Brain-1499922.onnx",
+                "reward": -4.46256488164266,
+                "creation_time": 1774002276.118713,
+                "auxillary_file_paths": [
+                    "results\\Run_LSTM_2\\GFSX_Brain\\GFSX_Brain-1499922.pt"
+                ]
+            },
+            {
+                "steps": 1879983,
+                "file_path": "results\\Run_LSTM_2\\GFSX_Brain\\GFSX_Brain-1879983.onnx",
+                "reward": 0.3514004349708557,
+                "creation_time": 1774002942.9856355,
+                "auxillary_file_paths": [
+                    "results\\Run_LSTM_2\\GFSX_Brain\\GFSX_Brain-1879983.pt"
+                ]
+            }
+        ],
+        "final_checkpoint": {
+            "steps": 1879983,
+            "file_path": "results\\Run_LSTM_2\\GFSX_Brain.onnx",
+            "reward": 0.3514004349708557,
+            "creation_time": 1774002942.9856355,
+            "auxillary_file_paths": [
+                "results\\Run_LSTM_2\\GFSX_Brain\\GFSX_Brain-1879983.pt"
+            ]
+        }
+    },
+    "metadata": {
+        "stats_format_version": "0.3.0",
+        "mlagents_version": "1.1.0",
+        "torch_version": "2.2.2+cu121"
+    }
+}
