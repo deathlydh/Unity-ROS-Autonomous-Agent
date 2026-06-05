@@ -1,6 +1,7 @@
 using UnityEngine;
 using Unity.Robotics.ROSTCPConnector;
 using RosMessageTypes.Geometry;
+using RosMessageTypes.Std;
 
 public class VirtualSensors : MonoBehaviour
 {
@@ -58,10 +59,16 @@ public class VirtualSensors : MonoBehaviour
     private int _realRightIR = 0;
     private int _realGripperIR = 0;
 
+    [HideInInspector]
+    public GameObject lastGripperHitObj = null;
+
     void Start()
     {
         ros = ROSConnection.GetOrCreateInstance();
+        // Основные датчики: УЗ + боковые ИК
         ros.Subscribe<QuaternionMsg>("/sensor/data", SensorCallback);
+        // Отдельный топик для ИК датчика клешни (unity_gripper_ir.py)
+        ros.Subscribe<Int32Msg>("/sensor/gripper_ir", GripperIRCallback);
     }
 
     void SensorCallback(QuaternionMsg msg)
@@ -72,9 +79,19 @@ public class VirtualSensors : MonoBehaviour
         _realUltrasonicDist = Mathf.Clamp01((float)msg.x / maxUltrasonicRange);
         _realLeftIR = (int)msg.y;
         _realRightIR = (int)msg.z;
-        _realGripperIR = (int)msg.w;
+        // msg.w намеренно НЕ читаем — gripperIR приходит через /sensor/gripper_ir
 
-        Debug.Log($"[VirtualSensors] ROS данные: UZ={msg.x:F2}м, IR_L={_realLeftIR}, IR_R={_realRightIR}, IR_CLAW={_realGripperIR}");
+        Debug.Log($"[VirtualSensors] ROS данные: UZ={msg.x:F2}м, IR_L={_realLeftIR}, IR_R={_realRightIR}");
+    }
+
+    void GripperIRCallback(Int32Msg msg)
+    {
+        // Отдельный топик от unity_gripper_ir.py (IR_M, pin 22)
+        // Устанавливаем useRealSensors=true чтобы Unity знала о реальных данных
+        useRealSensors = true;
+        _realGripperIR = msg.data;
+        if (_realGripperIR == 1)
+            Debug.Log("[VirtualSensors] 🎯 GRIPPER IR = 1 — мяч в клешне!");
     }
 
     void FixedUpdate()
@@ -84,16 +101,18 @@ public class VirtualSensors : MonoBehaviour
         int v_leftIR = CalculateVirtualIR(LeftIRPoint, irRange);
         int v_rightIR = CalculateVirtualIR(RightIRPoint, irRange);
         // Для клешни используем фильтр по тэгу "TargetBall", чтобы не хватать стены/пол
-        int v_gripperIR = CalculateVirtualIR(GripperIRPoint, gripperIRRange, "TargetBall");
+        int v_gripperIR = CalculateVirtualIR(GripperIRPoint, gripperIRRange, "TargetBall", true);
 
         if (useRealSensors)
         {
             if (ignoreVirtualInInference)
             {
                 // 2. РЕЖИМ ПОРЯДОЧНОСТИ: Доверяем только реальным датчикам (используем при десинхроне)
+                // ИСПРАВЛЕНО: gripperIR не присваивался — автозахват не работал в этом режиме.
                 ultrasonicDist = _realUltrasonicDist;
                 leftIR = _realLeftIR;
                 rightIR = _realRightIR;
+                gripperIR = _realGripperIR; // BUGFIX: было пропущено, теперь захват работает
             }
             else
             {
@@ -121,28 +140,44 @@ public class VirtualSensors : MonoBehaviour
     // ====================================================
 
     /// <summary>
-    /// Считает виртуальный УЗ датчик рейкастом вперёд.
+    /// Считает виртуальный УЗ датчик КОНУСОМ из 5 лучей (0°, ±7°, ±15°).
+    /// HC-SR04 имеет реальный конус ~30°. Один луч строго вперёд не видит стены под углом.
     /// Возвращает нормализованное значение 0..1 (НЕ пишет в поле!).
     /// </summary>
+    private static readonly float[] ultrasonicConeAngles = { 0f, -7f, 7f, -15f, 15f };
+
     float CalculateVirtualUltrasonic()
     {
         if (CenterPoint == null) return 1f;
 
-        Vector3 dir = CenterPoint.forward;
-        if (Physics.Raycast(CenterPoint.position, dir, out RaycastHit hit, maxUltrasonicRange))
+        float closestDist = maxUltrasonicRange;
+
+        foreach (float angle in ultrasonicConeAngles)
         {
-            return hit.distance / maxUltrasonicRange;
+            Vector3 dir = Quaternion.Euler(0f, angle, 0f) * CenterPoint.forward;
+            // RaycastAll + фильтр: ультразвук видит стены/препятствия, но НЕ мяч!
+            // На реальном роботе мячик слишком маленький/мягкий для ультразвука.
+            RaycastHit[] hits = Physics.RaycastAll(CenterPoint.position, dir, maxUltrasonicRange);
+            foreach (var hit in hits)
+            {
+                if (hit.collider.CompareTag("TargetBall")) continue;
+                if (hit.distance < closestDist)
+                {
+                    closestDist = hit.distance;
+                }
+            }
         }
-        return 1f; // Пусто — максимум
+        return closestDist / maxUltrasonicRange;
     }
 
     /// <summary>
     /// Считает виртуальный ИК датчик рейкастом в направлении point.forward.
     /// tagFilter - если задан, возвращает 1 только если попали в объект с этим тэгом.
     /// </summary>
-    int CalculateVirtualIR(Transform point, float range, string tagFilter = null)
+    int CalculateVirtualIR(Transform point, float range, string tagFilter = null, bool isGripper = false)
     {
         if (point == null) return 0;
+        if (isGripper) lastGripperHitObj = null;
 
         Vector3 dir = point.forward;
         // Используем QueryTriggerInteraction.Collide, так как мяч может быть триггером
@@ -150,6 +185,7 @@ public class VirtualSensors : MonoBehaviour
         {
             if (string.IsNullOrEmpty(tagFilter) || hit.collider.CompareTag(tagFilter))
             {
+                if (isGripper) lastGripperHitObj = hit.collider.gameObject;
                 return 1; // Препятствие в пределах range (соответствует фильтру)
             }
             else if (!string.IsNullOrEmpty(tagFilter))

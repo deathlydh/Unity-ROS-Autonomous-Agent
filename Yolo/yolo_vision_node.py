@@ -7,9 +7,9 @@ from ultralytics import YOLO
 
 # --- НАСТРОЙКИ ---
 STREAM_URL = "http://192.168.1.1:8080/"
-MODEL_NAME = "yolov8s.pt"  # Меняем Nano(n) на Small(s). На RTX 4060Ti будет летать, но точность в разы выше!
-CONFIDENCE = 0.20  # Чуть снизили для более стабильного захвата
-TARGET_CLASSES = [32, 49]  # 32='sports ball', 49='orange'. YOLO часто путает оранжевый пластиковый мяч с апельсином!
+MODEL_NAME = "best.pt"  # Ваша новая кастомная модель
+CONFIDENCE = 0.20      # Для кастомных моделей часто лучше ставить чуть выше, чем 0.20
+TARGET_CLASSES = [0]    # ID класса мяча в вашей новой модели
 
 
 # --- UDP ---
@@ -57,8 +57,11 @@ def run_vision():
             continue
 
         start = time.time()
-        results = model.predict(frame, classes=TARGET_CLASSES, conf=CONFIDENCE,
-                                verbose=False)
+        # ИСПОЛЬЗУЕМ TRACK ВМЕСТО PREDICT!
+        # Это включает встроенный трекер (BoT-SORT / ByteTrack). Он будет "додумывать" позицию мяча, 
+        # даже если YOLO визуально потеряет его на несколько кадров из-за смазывания!
+        results = model.track(frame, classes=TARGET_CLASSES, conf=CONFIDENCE,
+                              persist=True, verbose=False)
 
         x_norm, y_norm, sees = 0.0, 1.0, 0.0
 
@@ -77,7 +80,7 @@ def run_vision():
                 x1, y1, x2, y2 = best_box.xyxy[0].cpu().numpy()
                 conf = float(best_box.conf[0])
                 cls_id = int(best_box.cls[0])
-                cls_name = "Ball" if cls_id == 32 else "Orange!" # Для отладки
+                cls_name = "Ball" if cls_id == 0 else f"ID:{cls_id}" # Для кастомной модели класс 0 = Мяч
                 
                 h, w = frame.shape[:2]
                 center_x = (x1 + x2) / 2.0

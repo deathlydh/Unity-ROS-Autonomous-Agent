@@ -30,16 +30,24 @@ public class GripperController : MonoBehaviour
 
     public void OpenGripper()
     {
-        if (hasBall && grabbedBall != null)
+        if (!hasBall) return;
+
+        if (grabbedBall != null)
         {
+            // Симуляция: отпускаем Unity-мяч
             grabbedBall.transform.SetParent(null);
+            
+            Collider ballCollider = grabbedBall.GetComponent<Collider>();
+            if (ballCollider != null) ballCollider.enabled = true;
+            
             Rigidbody rb = grabbedBall.GetComponent<Rigidbody>();
             if (rb != null) rb.isKinematic = false;
             
             grabbedBall = null;
-            hasBall = false;
-            Debug.Log("Мяч отпущен.");
         }
+
+        hasBall = false;
+        Debug.Log("[GripperController] Мяч отпущен.");
     }
 
     public bool CloseGripper()
@@ -49,30 +57,54 @@ public class GripperController : MonoBehaviour
         // Вместо триггера используем данные ИК-датчика из VirtualSensors
         if (sensors != null && sensors.gripperIR == 1)
         {
-            // Находим сам объект мяча (так как IR дает только факт наличия)
-            // Ищем ближайший мяч в радиусе захвата
-            Collider[] hits = Physics.OverlapSphere(holdPoint.position, 0.2f);
-            foreach (var hit in hits)
+            // Пытаемся найти Unity-объект мяча (работает в симуляции)
+            if (sensors.lastGripperHitObj != null && sensors.lastGripperHitObj.CompareTag(targetTag))
             {
-                if (hit.CompareTag(targetTag))
+                grabbedBall = sensors.lastGripperHitObj;
+            }
+            else
+            {
+                Collider[] hits = Physics.OverlapSphere(holdPoint.position, 0.05f);
+                foreach (var hit in hits)
                 {
-                    grabbedBall = hit.gameObject;
-                    hasBall = true;
-                    
-                    grabbedBall.transform.SetParent(holdPoint);
-                    grabbedBall.transform.localPosition = Vector3.zero;
-
-                    Rigidbody ballRb = grabbedBall.GetComponent<Rigidbody>();
-                    if (ballRb != null)
+                    if (hit.CompareTag(targetTag))
                     {
-                        ballRb.isKinematic = true;
-                        ballRb.linearVelocity = Vector3.zero;
-                        ballRb.angularVelocity = Vector3.zero;
+                        grabbedBall = hit.gameObject;
+                        break;
                     }
-
-                    Debug.Log($"Мяч {grabbedBall.name} захвачен (по данным ИК-датчика)!");
-                    return true;
                 }
+            }
+
+            if (grabbedBall != null)
+            {
+                // Симуляция: прикрепляем Unity-мяч к клешне
+                hasBall = true;
+                
+                Rigidbody ballRb = grabbedBall.GetComponent<Rigidbody>();
+                if (ballRb != null)
+                {
+                    ballRb.linearVelocity = Vector3.zero;
+                    ballRb.angularVelocity = Vector3.zero;
+                    ballRb.isKinematic = true;
+                }
+
+                Collider ballCollider = grabbedBall.GetComponent<Collider>();
+                if (ballCollider != null) ballCollider.enabled = false;
+
+                grabbedBall.transform.SetParent(holdPoint);
+                grabbedBall.transform.localPosition = Vector3.zero;
+
+                Debug.Log($"Мяч {grabbedBall.name} захвачен (строго по mesh)!");
+                return true;
+            }
+            else if (sensors.useRealSensors)
+            {
+                // v17 FIX: На РЕАЛЬНОМ роботе Unity-мяча нет!
+                // gripperIR=1 означает что реальный ИК видит реальный мяч → hasBall=true
+                // Без этого фикса hasBall ВСЕГДА false → робот не останавливался после захвата → кружился.
+                hasBall = true;
+                Debug.Log("[GripperController] Реальный захват: gripperIR=1, Unity-мяч не найден → hasBall=true по ИК-датчику");
+                return true;
             }
         }
         

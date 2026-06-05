@@ -1,0 +1,131 @@
+{
+    "ball_max_distance": {
+        "lesson_num": 1
+    },
+    "episode_length": {
+        "lesson_num": 0
+    },
+    "ball_max_offset": {
+        "lesson_num": 0
+    },
+    "ball_scale": {
+        "lesson_num": 0
+    },
+    "ball_mass": {
+        "lesson_num": 0
+    },
+    "vision_noise": {
+        "lesson_num": 0
+    },
+    "vision_dropout": {
+        "lesson_num": 0
+    },
+    "GFSX_Brain": {
+        "checkpoints": [
+            {
+                "steps": 45999910,
+                "file_path": "results\\buildnewrunv7\\GFSX_Brain\\GFSX_Brain-45999910.onnx",
+                "reward": 1.6955100899392908,
+                "creation_time": 1778270766.520879,
+                "auxillary_file_paths": [
+                    "results\\buildnewrunv7\\GFSX_Brain\\GFSX_Brain-45999910.pt"
+                ]
+            },
+            {
+                "steps": 46499860,
+                "file_path": "results\\buildnewrunv7\\GFSX_Brain\\GFSX_Brain-46499860.onnx",
+                "reward": 1.794030374616658,
+                "creation_time": 1778270999.1960595,
+                "auxillary_file_paths": [
+                    "results\\buildnewrunv7\\GFSX_Brain\\GFSX_Brain-46499860.pt"
+                ]
+            },
+            {
+                "steps": 46999891,
+                "file_path": "results\\buildnewrunv7\\GFSX_Brain\\GFSX_Brain-46999891.onnx",
+                "reward": 2.4819368379456654,
+                "creation_time": 1778271232.2407336,
+                "auxillary_file_paths": [
+                    "results\\buildnewrunv7\\GFSX_Brain\\GFSX_Brain-46999891.pt"
+                ]
+            },
+            {
+                "steps": 47499840,
+                "file_path": "results\\buildnewrunv7\\GFSX_Brain\\GFSX_Brain-47499840.onnx",
+                "reward": 1.934556790957084,
+                "creation_time": 1778271465.6837373,
+                "auxillary_file_paths": [
+                    "results\\buildnewrunv7\\GFSX_Brain\\GFSX_Brain-47499840.pt"
+                ]
+            },
+            {
+                "steps": 47999955,
+                "file_path": "results\\buildnewrunv7\\GFSX_Brain\\GFSX_Brain-47999955.onnx",
+                "reward": 1.5607215884404304,
+                "creation_time": 1778271697.3977506,
+                "auxillary_file_paths": [
+                    "results\\buildnewrunv7\\GFSX_Brain\\GFSX_Brain-47999955.pt"
+                ]
+            },
+            {
+                "steps": 48499895,
+                "file_path": "results\\buildnewrunv7\\GFSX_Brain\\GFSX_Brain-48499895.onnx",
+                "reward": 2.1426745846867563,
+                "creation_time": 1778271929.7783864,
+                "auxillary_file_paths": [
+                    "results\\buildnewrunv7\\GFSX_Brain\\GFSX_Brain-48499895.pt"
+                ]
+            },
+            {
+                "steps": 48999962,
+                "file_path": "results\\buildnewrunv7\\GFSX_Brain\\GFSX_Brain-48999962.onnx",
+                "reward": 2.171349364519119,
+                "creation_time": 1778272162.7531254,
+                "auxillary_file_paths": [
+                    "results\\buildnewrunv7\\GFSX_Brain\\GFSX_Brain-48999962.pt"
+                ]
+            },
+            {
+                "steps": 49499973,
+                "file_path": "results\\buildnewrunv7\\GFSX_Brain\\GFSX_Brain-49499973.onnx",
+                "reward": 1.7521862048937493,
+                "creation_time": 1778272392.072115,
+                "auxillary_file_paths": [
+                    "results\\buildnewrunv7\\GFSX_Brain\\GFSX_Brain-49499973.pt"
+                ]
+            },
+            {
+                "steps": 49999966,
+                "file_path": "results\\buildnewrunv7\\GFSX_Brain\\GFSX_Brain-49999966.onnx",
+                "reward": 2.433027406389288,
+                "creation_time": 1778272625.7531843,
+                "auxillary_file_paths": [
+                    "results\\buildnewrunv7\\GFSX_Brain\\GFSX_Brain-49999966.pt"
+                ]
+            },
+            {
+                "steps": 50000022,
+                "file_path": "results\\buildnewrunv7\\GFSX_Brain\\GFSX_Brain-50000022.onnx",
+                "reward": 2.4458383276812303,
+                "creation_time": 1778272625.897662,
+                "auxillary_file_paths": [
+                    "results\\buildnewrunv7\\GFSX_Brain\\GFSX_Brain-50000022.pt"
+                ]
+            }
+        ],
+        "final_checkpoint": {
+            "steps": 50000022,
+            "file_path": "results\\buildnewrunv7\\GFSX_Brain.onnx",
+            "reward": 2.4458383276812303,
+            "creation_time": 1778272625.897662,
+            "auxillary_file_paths": [
+                "results\\buildnewrunv7\\GFSX_Brain\\GFSX_Brain-50000022.pt"
+            ]
+        }
+    },
+    "metadata": {
+        "stats_format_version": "0.3.0",
+        "mlagents_version": "1.1.0",
+        "torch_version": "2.2.2+cu121"
+    }
+}
