@@ -7,6 +7,7 @@ TagManager:
   - Obstacle
   - Wall
   - TargetBall
+  - Gripper
   layers:
   - Default
   - TransparentFX

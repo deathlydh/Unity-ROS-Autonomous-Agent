@@ -6783,6 +6783,9 @@ MonoBehaviour:
   maxViewAngle: 20
   seesBall: 0
   lastKnownBallDirection: 0
+  yoloConfidence: 0
+  bboxWidth: 0
+  bboxHeight: 0
   yoloAngleIsZeroToOne: 1
   reverseYoloAngle: 0
   displayImage: {fileID: 0}
@@ -8287,8 +8290,13 @@ MonoBehaviour:
   moveSpeed: 0.57
   turnSpeed: 120
   smoothing: 0.05
-  motorDeadzone: 0.35
-  maxAccelPerStep: 0.15
+  turnK: 0.3
+  maxLinearCmd: 0.25
+  motorDeadzone: 10
+  minMotorPwm: 35
+  maxPwmStep: 15
+  pwmLeft: 0
+  pwmRight: 0
 --- !u!114 &4272541569449492431
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -8315,6 +8323,8 @@ MonoBehaviour:
   ultrasonicStopThreshold: 0.1
   ignoreVirtualInInference: 1
   useRealSensors: 0
+  realPwmLeft: 0
+  realPwmRight: 0
   lastGripperHitObj: {fileID: 0}
 --- !u!114 &2735952542883437972
 MonoBehaviour:
@@ -8382,9 +8392,9 @@ MonoBehaviour:
   isTraining: 1
   isMovementEnabled: 1
   enableVerboseLogging: 0
-  minActionLatency: 2
-  maxActionLatency: 5
-  sensorLatency: 1
+  minActionLatency: 8
+  maxActionLatency: 13
+  sensorLatency: 2
   realVision: {fileID: 0}
   virtualCamera: {fileID: 0}
   simulatedYolo: {fileID: 2606991227086470949}
@@ -15776,6 +15786,9 @@ MonoBehaviour:
   maxViewAngle: 20
   seesBall: 0
   lastKnownBallDirection: 0
+  yoloConfidence: 0
+  bboxWidth: 0
+  bboxHeight: 0
   yoloAngleIsZeroToOne: 0
   reverseYoloAngle: 0
   displayImage: {fileID: 1176965485648956246}
@@ -15936,6 +15949,7 @@ MonoBehaviour:
   m_EditorClassIdentifier: Assembly-CSharp::SimulatedYoloCamera
   projectionCamera: {fileID: 8321708726059869880}
   ballRadius: 0.03
+  horizontalFOV: 40
   maxViewDistance: 2
   occlusionMask:
     serializedVersion: 2
@@ -15947,6 +15961,8 @@ MonoBehaviour:
   seesBall: 0
   lastKnownBallDirection: 0
   debounceDuration: 0.3
+  minYoloFPS: 15
+  maxYoloFPS: 30
   targetBall: {fileID: 0}
 --- !u!1 &8543559740968282886
 GameObject:

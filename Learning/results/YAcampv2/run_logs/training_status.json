@@ -1,0 +1,128 @@
+{
+    "ball_max_distance": {
+        "lesson_num": 0
+    },
+    "episode_length": {
+        "lesson_num": 0
+    },
+    "ball_scale": {
+        "lesson_num": 0
+    },
+    "ball_mass": {
+        "lesson_num": 0
+    },
+    "vision_noise": {
+        "lesson_num": 0
+    },
+    "vision_dropout": {
+        "lesson_num": 0
+    },
+    "GFSX_Brain": {
+        "checkpoints": [
+            {
+                "steps": 45999940,
+                "file_path": "results\\YAcampv2\\GFSX_Brain\\GFSX_Brain-45999940.onnx",
+                "reward": 4.176148992550524,
+                "creation_time": 1782941004.287286,
+                "auxillary_file_paths": [
+                    "results\\YAcampv2\\GFSX_Brain\\GFSX_Brain-45999940.pt"
+                ]
+            },
+            {
+                "steps": 46499827,
+                "file_path": "results\\YAcampv2\\GFSX_Brain\\GFSX_Brain-46499827.onnx",
+                "reward": 4.78747890317222,
+                "creation_time": 1782941233.3930974,
+                "auxillary_file_paths": [
+                    "results\\YAcampv2\\GFSX_Brain\\GFSX_Brain-46499827.pt"
+                ]
+            },
+            {
+                "steps": 46999988,
+                "file_path": "results\\YAcampv2\\GFSX_Brain\\GFSX_Brain-46999988.onnx",
+                "reward": 4.204411718490961,
+                "creation_time": 1782941463.0873168,
+                "auxillary_file_paths": [
+                    "results\\YAcampv2\\GFSX_Brain\\GFSX_Brain-46999988.pt"
+                ]
+            },
+            {
+                "steps": 47499711,
+                "file_path": "results\\YAcampv2\\GFSX_Brain\\GFSX_Brain-47499711.onnx",
+                "reward": 4.559775952595831,
+                "creation_time": 1782941690.876419,
+                "auxillary_file_paths": [
+                    "results\\YAcampv2\\GFSX_Brain\\GFSX_Brain-47499711.pt"
+                ]
+            },
+            {
+                "steps": 47999826,
+                "file_path": "results\\YAcampv2\\GFSX_Brain\\GFSX_Brain-47999826.onnx",
+                "reward": 4.016826236466082,
+                "creation_time": 1782941920.9572616,
+                "auxillary_file_paths": [
+                    "results\\YAcampv2\\GFSX_Brain\\GFSX_Brain-47999826.pt"
+                ]
+            },
+            {
+                "steps": 48499945,
+                "file_path": "results\\YAcampv2\\GFSX_Brain\\GFSX_Brain-48499945.onnx",
+                "reward": 4.949637527425451,
+                "creation_time": 1782942152.3113444,
+                "auxillary_file_paths": [
+                    "results\\YAcampv2\\GFSX_Brain\\GFSX_Brain-48499945.pt"
+                ]
+            },
+            {
+                "steps": 48999912,
+                "file_path": "results\\YAcampv2\\GFSX_Brain\\GFSX_Brain-48999912.onnx",
+                "reward": 4.316720767414079,
+                "creation_time": 1782942380.5974793,
+                "auxillary_file_paths": [
+                    "results\\YAcampv2\\GFSX_Brain\\GFSX_Brain-48999912.pt"
+                ]
+            },
+            {
+                "steps": 49499926,
+                "file_path": "results\\YAcampv2\\GFSX_Brain\\GFSX_Brain-49499926.onnx",
+                "reward": 4.412988895771604,
+                "creation_time": 1782942607.6040099,
+                "auxillary_file_paths": [
+                    "results\\YAcampv2\\GFSX_Brain\\GFSX_Brain-49499926.pt"
+                ]
+            },
+            {
+                "steps": 49999992,
+                "file_path": "results\\YAcampv2\\GFSX_Brain\\GFSX_Brain-49999992.onnx",
+                "reward": 6.0926022389903665,
+                "creation_time": 1782942840.7442787,
+                "auxillary_file_paths": [
+                    "results\\YAcampv2\\GFSX_Brain\\GFSX_Brain-49999992.pt"
+                ]
+            },
+            {
+                "steps": 50000416,
+                "file_path": "results\\YAcampv2\\GFSX_Brain\\GFSX_Brain-50000416.onnx",
+                "reward": 6.031991155658449,
+                "creation_time": 1782942840.9223719,
+                "auxillary_file_paths": [
+                    "results\\YAcampv2\\GFSX_Brain\\GFSX_Brain-50000416.pt"
+                ]
+            }
+        ],
+        "final_checkpoint": {
+            "steps": 50000416,
+            "file_path": "results\\YAcampv2\\GFSX_Brain.onnx",
+            "reward": 6.031991155658449,
+            "creation_time": 1782942840.9223719,
+            "auxillary_file_paths": [
+                "results\\YAcampv2\\GFSX_Brain\\GFSX_Brain-50000416.pt"
+            ]
+        }
+    },
+    "metadata": {
+        "stats_format_version": "0.3.0",
+        "mlagents_version": "1.1.0",
+        "torch_version": "2.2.2+cu121"
+    }
+}

@@ -16,6 +16,9 @@ public class YoloDataPacket
     public float angle;
     public float distance;
     public float sees;
+    public float conf;
+    public float w;
+    public float h;
 }
 
 /// <summary>
@@ -61,6 +64,11 @@ public class RealVision : MonoBehaviour
     public float maxViewAngle = 20f;    // FOV 40° (±20°) — ОТКАЛИБРОВАНО
     public bool seesBall;
     public float lastKnownBallDirection; // -1 (left), 1 (right), 0 (unknown)
+
+    [Header("YOLO Extra Telemetry")]
+    public float yoloConfidence;
+    public float bboxWidth;
+    public float bboxHeight;
 
     [Header("YOLO UDP Format Setting")]
     [Tooltip("Включите, если YOLO отправляет угол от 0 до 1 (0.5 = центр). Выключите, если YOLO уже шлет от -1 до 1.")]
@@ -156,13 +164,16 @@ public class RealVision : MonoBehaviour
         ProcessYoloInput((float)msg.x, (float)msg.y, msg.z > 0.5f);
     }
 
-    void ProcessYoloInput(float x, float y, bool ballDetected)
+    public void ProcessYoloInput(float x, float y, bool ballDetected, float conf = 0f, float w = 0f, float h = 0f)
     {
         useYOLO = true;
 
         if (ballDetected)
         {
             seesBall = true;
+            yoloConfidence = conf;
+            bboxWidth = w;
+            bboxHeight = h;
             
             // 1. УГОЛ: Универсальный парсер YOLO с настройкой из Inspector.
             if (yoloAngleIsZeroToOne) {
@@ -205,6 +216,9 @@ public class RealVision : MonoBehaviour
                 normalizedAngle = lastKnownBallDirection;
                 normalizedDistance = 1f;
                 _lastRawY = 1f;
+                yoloConfidence = 0f;
+                bboxWidth = 0f;
+                bboxHeight = 0f;
             }
         }
     }
@@ -247,8 +261,8 @@ public class RealVision : MonoBehaviour
         // Его данные имеют ВЫСШИЙ приоритет и перезаписывают HSV.
         while (_udpQueue.TryDequeue(out var packet))
         {
-            ProcessYoloInput(packet.angle, packet.distance, packet.sees > 0.5f);
-            Debug.Log($"[RealVision] YOLO -> seesBall={seesBall}, angle={normalizedAngle:F2}, dist={normalizedDistance:F2}");
+            ProcessYoloInput(packet.angle, packet.distance, packet.sees > 0.5f, packet.conf, packet.w, packet.h);
+            Debug.Log($"[RealVision] YOLO -> seesBall={seesBall}, angle={normalizedAngle:F2}, dist={normalizedDistance:F2}, conf={yoloConfidence:F2}");
         }
 
         UpdateDebugSphere();
@@ -519,6 +533,9 @@ public class RealVision : MonoBehaviour
             // Записываем время успешного кадра
             _lastSeenTime = System.DateTime.Now;
             seesBall = true;
+            yoloConfidence = 1.0f; // HSV fallback has 100% confidence for detection
+            bboxWidth = _ballRect.width;
+            bboxHeight = _ballRect.height;
         }
         else
         {
@@ -533,6 +550,9 @@ public class RealVision : MonoBehaviour
                 seesBall = false;
                 normalizedAngle = lastKnownBallDirection; // Остаточное направление
                 normalizedDistance = 1f;                  // Считаем, что он далеко
+                yoloConfidence = 0f;
+                bboxWidth = 0f;
+                bboxHeight = 0f;
             }
         }
     }

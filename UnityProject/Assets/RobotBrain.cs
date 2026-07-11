@@ -19,11 +19,11 @@ public class RobotBrain : Agent
 
     [Header("Latency Simulation (Sim-to-Real)")]
     [Tooltip("Минимальная задержка действий (в шагах FixedUpdate). 1 шаг ≈ 20мс при 50Hz.")]
-    public int minActionLatency = 2;
+    public int minActionLatency = 8;
     [Tooltip("Максимальная задержка действий (рандомизируется каждый эпизод).")]
-    public int maxActionLatency = 5;
+    public int maxActionLatency = 13;
     [Tooltip("Задержка сенсоров (шаги). Имитирует запаздывание ROS-топиков.")]
-    public int sensorLatency = 1;
+    public int sensorLatency = 2;
     private int currentActionLatency = 3;
 
     // Буфер задержки действий (Circular Queue)
@@ -148,25 +148,45 @@ public class RobotBrain : Agent
         {
             isMovementEnabled = !isMovementEnabled;
             Debug.Log("Движение " + (isMovementEnabled ? "разрешено!" : "запрещено!"));
+            
+            // v27: Автоматический сброс LSTM и одометрии при старте движения
+            if (isMovementEnabled)
+            {
+                ResetInferenceEpisode();
+            }
+        }
+        
+        // Ручной сброс кнопкой R (полезно при тестах)
+        if (Input.GetKeyDown(KeyCode.R))
+        {
+            ResetInferenceEpisode();
         }
     }
 
-
+    public void ResetInferenceEpisode()
+    {
+        Debug.Log("[RobotBrain] СБРОС: Обнуление LSTM-памяти и одометрии для чистого старта");
+        EndEpisode(); // ML-Agents сбросит LSTM память и вызовет OnEpisodeBegin()
+    }
 
     public override void OnEpisodeBegin()
     {
+        // v27: Всегда сбрасываем позицию и ротацию виртуального робота (для тренировки и инференса!)
+        // Это обнуляет displacementX и displacementZ
+        transform.position = startPosition;
+        transform.rotation = startRotation;
+
+        if (rb != null)
+        {
+            rb.linearVelocity = Vector3.zero;
+            rb.angularVelocity = Vector3.zero;
+        }
+
         if (isTraining)
         {
-            transform.position = startPosition;
             // Рандомизация стартовой ротации — агент учится искать мяч в любом направлении
             float randomYaw = UnityEngine.Random.Range(-180f, 180f);
             transform.rotation = startRotation * Quaternion.Euler(0f, randomYaw, 0f);
-
-            if (rb != null)
-            {
-                rb.linearVelocity = Vector3.zero;
-                rb.angularVelocity = Vector3.zero;
-            }
 
             // --- Сброс мяча (Stage 3) ---
             ResetBall();
@@ -733,22 +753,36 @@ public class RobotBrain : Agent
             blindApproachTicks = 0;
             isRetrying = false;
 
-            // === REWARD #1: DISTANCE DELTA (основная навигационная награда) ===
-            // Естественно учит: ехать к мячу (+), не крутиться (0), не отъезжать (-)
+            // === REWARD #1: DISTANCE DELTA (proximity-scaled) ===
+            // Чем ближе мяч — тем ВАЖНЕЕ точность приближения (множитель растёт).
+            // dist=0.8 → 2.8x, dist=0.3 → 4.8x, dist=0.1 → 5.6x
             if (wasSeeingBallLastStep)
             {
                 float distanceDelta = lastDistance - currentDist;
                 if (Mathf.Abs(distanceDelta) < 0.5f) // Фильтр спайков
                 {
-                    AddReward(distanceDelta * 2.0f);
+                    float proximityMultiplier = 2.0f + 4.0f * (1.0f - Mathf.Clamp01(currentDist));
+                    AddReward(distanceDelta * proximityMultiplier);
                 }
             }
 
-            // === REWARD #7: PROXIMITY SLOW-DOWN BONUS (v15) ===
-            // Когда мяч близко (dist < 0.3), бонус за МЕДЛЕННЫЙ подъезд.
-            // Учит робота замедляться перед мячом, а не таранить его.
-            // Совместим с NVIDIA Isaac Lab (proximity-based reward shaping).
+            // === REWARD #7: PROXIMITY SLOW-DOWN BONUS (v15, усилен) ===
             if (currentDist < 0.3f && gas > 0.01f && gas < 0.3f)
+            {
+                AddReward(0.005f);
+            }
+
+            // === REWARD #8: SPEED PENALTY NEAR BALL (v26) ===
+            // Штраф за высокую скорость вблизи мяча — не таранить!
+            if (currentDist < 0.25f && Mathf.Abs(gas) > 0.4f)
+            {
+                AddReward(-0.01f);
+            }
+
+            // === REWARD #9: ALIGNMENT BONUS (v26) ===
+            // Бонус за центрированный мяч при близком подъезде.
+            // Учит робота выравниваться перед захватом.
+            if (currentDist < 0.4f && Mathf.Abs(currentAngle) < 0.15f)
             {
                 AddReward(0.005f);
             }
@@ -834,7 +868,13 @@ public class RobotBrain : Agent
                 currentCameraYaw, gas, steering, cameraYawInput,
                 gripper != null && gripper.hasBall, holdTicks, isRetrying, wasCloseToBall,
                 blindApproachTicks, ballRecent, holdWithoutIR,
-                Mathf.Clamp(disp.x / 3f, -1f, 1f), Mathf.Clamp(disp.z / 3f, -1f, 1f), hdg, spd);
+                Mathf.Clamp(disp.x / 3f, -1f, 1f), Mathf.Clamp(disp.z / 3f, -1f, 1f), hdg, spd,
+                transform.position.x, transform.position.z,
+                realVision != null ? realVision.yoloConfidence : 0f,
+                realVision != null ? realVision.bboxWidth : 0f,
+                realVision != null ? realVision.bboxHeight : 0f,
+                sensors != null ? sensors.realPwmLeft : 0f,
+                sensors != null ? sensors.realPwmRight : 0f);
         }
     }
 
@@ -879,21 +919,16 @@ public class RobotBrain : Agent
 
             while (!validPos && attempts < 30)
             {
-                // --- CURRICULUM LEARNING (Встроенный ML-Agents) ---
-                // Параметры читаются из config.yaml → environment_parameters.
-                // Сложность повышается ТОЛЬКО когда средняя награда агента достигает порога.
                 float maxDist = Academy.Instance.EnvironmentParameters.GetWithDefault("ball_max_distance", 1.5f);
-                float maxOffset = Academy.Instance.EnvironmentParameters.GetWithDefault("ball_max_offset", 0.3f);
 
-                // Дистанция: от 0.5м до maxDist (контролируется Curriculum)
-                float randomZ = Random.Range(0.5f, maxDist);
-                
-                // Боковой разброс (контролируется Curriculum)
-                float randomX = Random.Range(-maxOffset, maxOffset);
-
-                randomPos = transform.position + transform.forward * randomZ + transform.right * randomX;
+                // === 360° SPAWN: мяч появляется в ЛЮБОМ направлении вокруг робота ===
+                float spawnAngle = Random.Range(0f, 360f);
+                float spawnDist = Random.Range(0.5f, maxDist);
+                Vector3 direction = Quaternion.Euler(0f, spawnAngle, 0f) * Vector3.forward;
+                randomPos = transform.position + direction * spawnDist;
                 randomPos.y = transform.position.y + 0.2f;
 
+                // --- Проверка: не попал ли мяч в объект или за пределы арены ---
                 Collider[] colliders = Physics.OverlapSphere(randomPos, 0.15f);
                 bool hasObstacle = false;
                 foreach (var c in colliders)
@@ -905,12 +940,20 @@ public class RobotBrain : Agent
                     }
                 }
 
+                // Дополнительно: Raycast вниз — проверяем что под мячом есть пол (не за границей арены)
+                if (!hasObstacle)
+                {
+                    bool hasFloor = Physics.Raycast(randomPos + Vector3.up * 0.5f, Vector3.down, 2f);
+                    if (!hasFloor) hasObstacle = true;
+                }
+
                 if (!hasObstacle) validPos = true;
                 attempts++;
             }
 
             if (!validPos)
             {
+                // Fallback: прямо перед роботом (гарантированно валидная позиция)
                 randomPos = transform.position + transform.forward * 0.7f;
                 randomPos.y = transform.position.y + 0.2f;
             }

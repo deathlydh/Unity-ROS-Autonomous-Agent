@@ -1,30 +1,28 @@
 # 📋 TODO: Что ещё не сделано
 
-> Последнее обновление: 2026-06-01
+> Последнее обновление: 2026-06-16
 
 ---
 
-## 🔴 Критично (сделать перед обучением)
+## 🔴 Критично (анализ Brain 26)
 
-- [ ] **Сбилдить проект** — все v17 фиксы только в коде, нужен новый Build
-- [ ] **Проверить в Editor** — запустить, убедиться что Console показывает:
-  - `FOV=30.5° (hFOV=40°)`
-  - `targetBall=...` (не NULL)
-  - ballSeen > 0% в sim_log.csv
-- [ ] **Проверить motorDeadzone** — сейчас 0.35 в TrackController.cs, но MIN_MOTOR_PWM=20 на реале. Возможно нужно 0.20.
+- [ ] **Проанализировать логи обучения Brain 26** — TensorBoard: GrabSuccess, Cumulative Reward, Gas, Reverse%
+- [ ] **Тест в симуляторе** — мяч перед роботом + мяч сбоку → проверить что модель находит и подъезжает
+- [ ] **Тест на реальном роботе** — проверить:
+  - [ ] Подъезд к мячу → замедление → центровка → захват
+  - [ ] Мяч сбоку → робот поворачивается и находит
+  - [ ] Захват мяча → робот СТОИТ (hasBall=true → track.Move(0,0))
+- [ ] **Сравнить Brain 26 vs Brain 25** — через diagnostic_log: ballSeen%, gas vs dist, steer quality
 
 ---
 
-## 🟡 Сделать после обучения
+## 🟡 Сделать после успешного теста
 
-- [ ] **Тест цифрового инференса** — робот должен ехать к мячу, не кружиться
-- [ ] **Тест реального робота** — проверить:
-  - [ ] Захват мяча → робот стоит
-  - [ ] Ложный ИК (стул) → клешня НЕ закрывается
-  - [ ] Console: `[RobotBrain] Захват: gripperIR=1, ballRecentlySeen=True`
-  - [ ] Console: `[RobotBrain] Ложное срабатывание ИК: мяч не был виден ...`
-- [ ] **Сравнить sim_log.csv и real_log.csv** через analyze_logs.py
-- [ ] **MIN_MOTOR_PWM = 20** — проверить что уже применено на Raspberry Pi (`R:\unity_master.py`)
+- [ ] **Добавить запись видео с YOLO-камеры** — для диагностики bbox, confidence, timing
+- [ ] **Логирование PWM в diagnostic_log** — что моторы реально получают
+- [ ] **Логирование YOLO FPS** — если < 5 fps, модель работает на устаревших данных
+- [ ] **ONNX behavior test для Brain 26** — `onnx_behavior.py` / `compare_models.py`
+- [ ] **Проверить повторный запуск** — модель может деградировать без episode reset при inference (LSTM state drift)
 
 ---
 
@@ -32,10 +30,24 @@
 
 - [ ] **Inference episode reset** — LSTM state может деградировать без ресета. Добавить soft reset каждые N шагов
 - [ ] **Calibrate RealVision distance curve** — `pixelYToVirtualDistance` AnimationCurve в RealVision.cs должна совпадать с SimulatedYoloCamera distance mapping
-- [ ] **BlindZonePenalty** — раньше был скрипт, который штрафовал за загон мяча в слепые зоны. Сейчас не используется. Возможно стоит вернуть через distance delta
-- [ ] **Curriculum learning** — сейчас отключён (фиксированные диапазоны). Можно вернуть для постепенного увеличения сложности
 - [ ] **Тест с разными мячами** — YOLO распознаёт target class, но domain randomization по цвету/текстуре мяча не делалась
-- [ ] **Оценка скорости подъезда** — реальный робот едет слишком быстро, мяч часто в слепых зонах. Возможно нужен speed penalty при близкой дистанции
+- [ ] **ball_max_distance увеличить до 4-5м** — реальная комната ~5м, но сейчас max=3.0м
+- [ ] **Добавить одометрию** — логировать `transform.position.x, z` для визуализации траектории
+- [ ] **Multi-ball episodes** — после захвата первого мяча → новый мяч → тренирует поиск
+
+---
+
+## ✅ Сделано (v26)
+
+- [x] 360° спавн мяча (RobotBrain.cs ResetBall)
+- [x] Proximity-scaled distance reward (distDelta × 2-6x)
+- [x] Speed penalty near ball (dist<0.25, |gas|>0.4 → -0.01)
+- [x] Alignment bonus (dist<0.4, |angle|<0.15 → +0.005)
+- [x] TURN_K: 0.15 → 0.30 (unity_master.py)
+- [x] MAX_LINEAR: 0.25 cap (unity_master.py)
+- [x] Удалён ball_max_offset из config.yaml
+- [x] Обучение Brain 26 запущено и завершено
+- [x] ONNX reverse engineering (Brain 8 vs Brain 25)
 
 ---
 
@@ -46,3 +58,4 @@
 - ~~Добавить шум при inference~~ — YOLO и так шумит
 - ~~Менять track speed при inference~~ — определяется реальными моторами
 - ~~Вернуть VirtualCamera~~ — заменена на SimulatedYoloCamera
+- ~~Curriculum learning~~ — пользователь отказался, фиксированные диапазоны

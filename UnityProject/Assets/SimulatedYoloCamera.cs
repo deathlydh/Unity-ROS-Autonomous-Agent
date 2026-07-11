@@ -53,13 +53,22 @@ public class SimulatedYoloCamera : MonoBehaviour
     [Tooltip("Секунды удержания после потери мяча (имитация BoT-SORT трекера в YOLO)")]
     public float debounceDuration = 0.3f;
 
+    [Header("Sim-to-Real: YOLO Frame Rate")]
+    [Tooltip("Минимальная частота кадров YOLO")]
+    public float minYoloFPS = 20f;
+    [Tooltip("Максимальная частота кадров YOLO")]
+    public float maxYoloFPS = 30f;
+
     [HideInInspector]
     public Transform targetBall; // Назначается из RobotBrain.cs
 
-    // Debounce internals
+    // Debounce & YOLO Rate internals
     private float _lastSeenTime = -100f;
     private float _lastNormalizedAngle;
     private float _lastNormalizedDistance;
+    private bool _lastDirectlySeesBall;
+    private float _nextYoloUpdateTime = 0f;
+    private float _currentYoloInterval = 0.1f;
 
     void Start()
     {
@@ -71,27 +80,26 @@ public class SimulatedYoloCamera : MonoBehaviour
 
         if (projectionCamera != null)
         {
-            // v17 FIX: СНАЧАЛА настраиваем projection (aspect + FOV), ПОТОМ отключаем рендеринг!
-            // Unity может НЕ обновлять projection matrix на disabled камере.
-            // Это объясняет "Display 1 No cameras rendering" + ballSeen=0%.
-
-            // 1. Фиксируем aspect ratio для идентичности с реальной камерой 640x480
+            // v17 FIX: aspect ratio для идентичности с реальной камерой 640x480
             projectionCamera.aspect = 4f / 3f;
 
-            // 2. Рассчитываем ВЕРТИКАЛЬНЫЙ FOV из калиброванного горизонтального FOV.
-            // Формула: vFOV = 2 * atan(tan(hFOV/2) / aspect)
-            float halfHFovRad = horizontalFOV * 0.5f * Mathf.Deg2Rad;
-            float calculatedVFov = 2f * Mathf.Atan(Mathf.Tan(halfHFovRad) / projectionCamera.aspect) * Mathf.Rad2Deg;
-            projectionCamera.fieldOfView = calculatedVFov;
+            // 2. Рассчитываем вертикальный FOV на основе горизонтального FOV и aspect 4:3
+            // vFOV = 2 * arctan( tan(hFOV/2) / aspect )
+            float hFovRad = horizontalFOV * Mathf.Deg2Rad;
+            float vFovRad = 2f * Mathf.Atan(Mathf.Tan(hFovRad * 0.5f) / projectionCamera.aspect);
+            projectionCamera.fieldOfView = vFovRad * Mathf.Rad2Deg;
 
-            // 3. ТЕПЕРЬ отключаем рендеринг (проекционная матрица уже настроена)
+            // 3. Отключаем рендеринг камеры для производительности!
             projectionCamera.enabled = false;
 
-            // Исключаем слой робота из occlusionMask
-            Transform robotRoot = transform.root;
-            foreach (Collider col in robotRoot.GetComponentsInChildren<Collider>())
+            // 4. Проверяем, что мяч назначен
+            if (targetBall == null)
             {
-                occlusionMask &= ~(1 << col.gameObject.layer);
+                GameObject found = GameObject.FindGameObjectWithTag("TargetBall");
+                if (found != null)
+                {
+                    targetBall = found.transform;
+                }
             }
 
             Debug.Log($"[SimulatedYoloCamera] Initialized: FOV={projectionCamera.fieldOfView:F1}° (hFOV={horizontalFOV}°), " +
@@ -126,70 +134,62 @@ public class SimulatedYoloCamera : MonoBehaviour
             return;
         }
 
-        // v17: Автоматический ballRadius из реального scale мяча
-        // Unity Sphere: mesh radius = 0.5 в local space → world radius = lossyScale * 0.5
+        // Автоматический ballRadius из реального scale мяча
         ballRadius = targetBall.lossyScale.x * 0.5f;
 
-        // === ЭТАП 1: Проецируем мяч на виртуальный экран ===
-        Vector3 viewportPos = projectionCamera.WorldToViewportPoint(targetBall.position);
-
-        // viewportPos.x = 0..1 (лево..право в кадре)
-        // viewportPos.y = 0..1 (низ..верх в кадре)
-        // viewportPos.z = расстояние от камеры (>0 = перед камерой)
-
-        bool inFrontOfCamera = viewportPos.z > 0;
-        bool inViewport = viewportPos.x >= 0f && viewportPos.x <= 1f &&
-                          viewportPos.y >= 0f && viewportPos.y <= 1f;
-        float distance = Vector3.Distance(projectionCamera.transform.position, targetBall.position);
-        bool inRange = distance < maxViewDistance;
-
-        // === ЭТАП 2: Проверка окклюзии (стены + клешня) ===
-        bool hasLineOfSight = true;
-        bool blockedByClaw = false;
-
-        if (inFrontOfCamera && inViewport && inRange)
+        // v27: Симуляция фреймрейта YOLO (8-12 Hz)
+        bool yoloTick = false;
+        if (Time.time >= _nextYoloUpdateTime)
         {
-            hasLineOfSight = CheckLineOfSight(
-                projectionCamera.transform.position,
-                targetBall.position,
-                distance,
-                out blockedByClaw
-            );
+            yoloTick = true;
+            _currentYoloInterval = Random.Range(1f / maxYoloFPS, 1f / minYoloFPS);
+            _nextYoloUpdateTime = Time.time + _currentYoloInterval;
         }
 
-        bool directlySeesBall = inFrontOfCamera && inViewport && inRange && hasLineOfSight;
-
-        if (directlySeesBall)
+        // Если это YOLO-тик, пересчитываем реальную видимость мяча
+        if (yoloTick)
         {
-            _lastSeenTime = Time.time;
+            // === ЭТАП 1: Проецируем мяч на виртуальный экран ===
+            Vector3 viewportPos = projectionCamera.WorldToViewportPoint(targetBall.position);
+            bool inFrontOfCamera = viewportPos.z > 0;
+            bool inViewport = viewportPos.x >= 0f && viewportPos.x <= 1f &&
+                              viewportPos.y >= 0f && viewportPos.y <= 1f;
+            float distance = Vector3.Distance(projectionCamera.transform.position, targetBall.position);
+            bool inRange = distance < maxViewDistance;
 
-            // === ЭТАП 3: Угол мяча (ИДЕНТИЧЕН YOLO) ===
-            // YOLO: x_norm = (center_x - w/2) / (w/2)
-            // Unity: viewport.x = center_x / w → x_norm = (viewport.x - 0.5) * 2
-            normalizedAngle = (viewportPos.x - 0.5f) * 2f;
-            normalizedAngle = Mathf.Clamp(normalizedAngle, -1f, 1f);
+            // === ЭТАП 2: Проверка окклюзии ===
+            bool blockedByClaw = false;
+            bool hasLineOfSight = inFrontOfCamera && inViewport && inRange &&
+                                 CheckLineOfSight(projectionCamera.transform.position, targetBall.position, distance, out blockedByClaw);
 
-            // === ЭТАП 4: Дистанция мяча (ИДЕНТИЧЕН YOLO) ===
-            // YOLO: y_norm = bbox_height / frame_height
-            // Unity: проецируем верх и низ мяча → разница viewport.y = bbox_height / frame_height
-            normalizedDistance = CalculateProjectedBboxHeight(viewportPos, distance);
+            _lastDirectlySeesBall = inFrontOfCamera && inViewport && inRange && hasLineOfSight;
 
+            if (_lastDirectlySeesBall)
+            {
+                _lastSeenTime = Time.time;
+                _lastNormalizedAngle = (viewportPos.x - 0.5f) * 2f;
+                _lastNormalizedAngle = Mathf.Clamp(_lastNormalizedAngle, -1f, 1f);
+                _lastNormalizedDistance = CalculateProjectedBboxHeight(viewportPos, distance);
+                
+                lastKnownBallDirection = Mathf.Sign(_lastNormalizedAngle);
+                if (lastKnownBallDirection == 0) lastKnownBallDirection = 1f;
+            }
+        }
+
+        // === ЭТАП 3: Дебаунс и логика видимости тикают на каждом кадре! ===
+        if (_lastDirectlySeesBall)
+        {
             seesBall = true;
-            lastKnownBallDirection = Mathf.Sign(normalizedAngle);
-            if (lastKnownBallDirection == 0) lastKnownBallDirection = 1f;
-
-            // Сохраняем для debounce
-            _lastNormalizedAngle = normalizedAngle;
-            _lastNormalizedDistance = normalizedDistance;
-
+            normalizedAngle = _lastNormalizedAngle;
+            normalizedDistance = _lastNormalizedDistance;
             Debug.DrawLine(projectionCamera.transform.position, targetBall.position, Color.green);
         }
         else
         {
-            // === МЯЧ НЕ ВИДЕН ===
+            // Мяч не виден напрямую
             if (Time.time - _lastSeenTime <= debounceDuration)
             {
-                // Debounce: удерживаем последние значения (имитация BoT-SORT трекера)
+                // Debounce удерживает последние известные значения
                 seesBall = true;
                 normalizedAngle = _lastNormalizedAngle;
                 normalizedDistance = _lastNormalizedDistance;
@@ -200,60 +200,39 @@ public class SimulatedYoloCamera : MonoBehaviour
                 normalizedAngle = 0f;
                 normalizedDistance = 1f;
             }
-
-            Debug.DrawRay(projectionCamera.transform.position,
-                          projectionCamera.transform.forward * maxViewDistance, Color.red);
+            Debug.DrawRay(projectionCamera.transform.position, projectionCamera.transform.forward * maxViewDistance, Color.red);
         }
     }
 
     /// <summary>
     /// Рассчитывает normalizedDistance через обратную проекцию bbox viewport height.
-    /// 
-    /// Формула: из viewport bbox_height → реальная дистанция → нормализация 0..1
-    /// 
-    /// СТАРЫЙ БАГ: maxBboxHeight=0.15 насыщался при 0.5м (normalizedDist=0.0).
-    /// Это убивало distance delta reward на последних 50см подъезда → агент не ехал к мячу!
-    /// 
-    /// НОВЫЙ ПОДХОД: обратная проекция через FOV камеры.
-    /// bboxHeight = 2*ballRadius / (distance * 2 * tan(vFOV/2)) 
-    /// → distance = ballRadius / (bboxHeight * tan(vFOV/2))
-    /// → normalizedDistance = distance / maxViewDistance
-    /// 
-    /// Результат: линейная шкала 0-1 без сатурации. Полный градиент на ВСЕХ дистанциях.
     /// </summary>
     float CalculateProjectedBboxHeight(Vector3 viewportCenter, float distance)
     {
-        // Проецируем верхнюю и нижнюю точки мяча
         Vector3 ballTop = targetBall.position + Vector3.up * ballRadius;
         Vector3 ballBottom = targetBall.position - Vector3.up * ballRadius;
 
         Vector3 vpTop = projectionCamera.WorldToViewportPoint(ballTop);
         Vector3 vpBottom = projectionCamera.WorldToViewportPoint(ballBottom);
 
-        // bbox_height в viewport координатах (0..1)
         float bboxHeight = Mathf.Abs(vpTop.y - vpBottom.y);
 
         if (bboxHeight < 0.001f) return 1f; // Слишком далеко, практически невидим
 
-        // Обратная проекция: из bbox viewport fraction → реальная дистанция
-        // Camera.fieldOfView — ВЕРТИКАЛЬНЫЙ FOV в градусах
         float halfVFovRad = projectionCamera.fieldOfView * 0.5f * Mathf.Deg2Rad;
         float approxDist = ballRadius / (bboxHeight * Mathf.Tan(halfVFovRad));
 
-        // Нормализуем: 0 = вплотную, 1 = maxViewDistance
         return Mathf.Clamp01(approxDist / maxViewDistance);
     }
 
     /// <summary>
     /// Проверяет прямую видимость от камеры к мячу.
-    /// Несколько лучей для проверки частичной окклюзии (клешня может закрывать часть мяча).
     /// </summary>
     bool CheckLineOfSight(Vector3 from, Vector3 ballPos, float dist, out bool clawBlocked)
     {
         clawBlocked = false;
         int blocked = 0;
 
-        // Центральный луч + смещённые (имитация того, что YOLO видит bbox, а не точку)
         Vector3[] offsets;
         if (occlusionRayCount >= 5)
         {
@@ -263,7 +242,6 @@ public class SimulatedYoloCamera : MonoBehaviour
                 Vector3.down * ballRadius,
                 Vector3.left * ballRadius,
                 Vector3.right * ballRadius,
-                // Дополнительные диагональные
                 (Vector3.up + Vector3.left).normalized * ballRadius * 0.7f,
                 (Vector3.up + Vector3.right).normalized * ballRadius * 0.7f,
                 (Vector3.down + Vector3.left).normalized * ballRadius * 0.7f,
@@ -291,7 +269,6 @@ public class SimulatedYoloCamera : MonoBehaviour
 
             if (Physics.Raycast(from, dir, out RaycastHit hit, rayDist, occlusionMask))
             {
-                // Попали в что-то ДО мяча
                 if (!hit.collider.CompareTag("TargetBall"))
                 {
                     blocked++;
@@ -304,16 +281,13 @@ public class SimulatedYoloCamera : MonoBehaviour
             }
         }
 
-        // Мяч виден, если хотя бы один луч прошёл
         return blocked < raysToCheck;
     }
 
-    // === GIZMOS (визуализация в Scene View) ===
     private void OnDrawGizmosSelected()
     {
         if (projectionCamera == null) return;
 
-        // Рисуем frustum камеры
         Gizmos.color = seesBall ? Color.green : Color.red;
         Gizmos.matrix = projectionCamera.transform.localToWorldMatrix;
         Gizmos.DrawFrustum(
@@ -325,7 +299,6 @@ public class SimulatedYoloCamera : MonoBehaviour
         );
         Gizmos.matrix = Matrix4x4.identity;
 
-        // Линия к мячу
         if (seesBall && targetBall != null)
         {
             Gizmos.color = Color.cyan;

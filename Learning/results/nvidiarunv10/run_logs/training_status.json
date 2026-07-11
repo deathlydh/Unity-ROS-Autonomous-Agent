@@ -1,0 +1,128 @@
+{
+    "ball_max_distance": {
+        "lesson_num": 0
+    },
+    "episode_length": {
+        "lesson_num": 0
+    },
+    "ball_scale": {
+        "lesson_num": 0
+    },
+    "ball_mass": {
+        "lesson_num": 0
+    },
+    "vision_noise": {
+        "lesson_num": 0
+    },
+    "vision_dropout": {
+        "lesson_num": 0
+    },
+    "GFSX_Brain": {
+        "checkpoints": [
+            {
+                "steps": 45999922,
+                "file_path": "results\\nvidiarunv10\\GFSX_Brain\\GFSX_Brain-45999922.onnx",
+                "reward": 4.892081860353989,
+                "creation_time": 1781559737.1466358,
+                "auxillary_file_paths": [
+                    "results\\nvidiarunv10\\GFSX_Brain\\GFSX_Brain-45999922.pt"
+                ]
+            },
+            {
+                "steps": 46499955,
+                "file_path": "results\\nvidiarunv10\\GFSX_Brain\\GFSX_Brain-46499955.onnx",
+                "reward": 5.174357698488056,
+                "creation_time": 1781559970.266048,
+                "auxillary_file_paths": [
+                    "results\\nvidiarunv10\\GFSX_Brain\\GFSX_Brain-46499955.pt"
+                ]
+            },
+            {
+                "steps": 46999999,
+                "file_path": "results\\nvidiarunv10\\GFSX_Brain\\GFSX_Brain-46999999.onnx",
+                "reward": 5.274149165949005,
+                "creation_time": 1781560202.2754788,
+                "auxillary_file_paths": [
+                    "results\\nvidiarunv10\\GFSX_Brain\\GFSX_Brain-46999999.pt"
+                ]
+            },
+            {
+                "steps": 47499937,
+                "file_path": "results\\nvidiarunv10\\GFSX_Brain\\GFSX_Brain-47499937.onnx",
+                "reward": 6.324093285415854,
+                "creation_time": 1781560435.6058018,
+                "auxillary_file_paths": [
+                    "results\\nvidiarunv10\\GFSX_Brain\\GFSX_Brain-47499937.pt"
+                ]
+            },
+            {
+                "steps": 47999932,
+                "file_path": "results\\nvidiarunv10\\GFSX_Brain\\GFSX_Brain-47999932.onnx",
+                "reward": 5.282598800193041,
+                "creation_time": 1781560669.8174882,
+                "auxillary_file_paths": [
+                    "results\\nvidiarunv10\\GFSX_Brain\\GFSX_Brain-47999932.pt"
+                ]
+            },
+            {
+                "steps": 48499903,
+                "file_path": "results\\nvidiarunv10\\GFSX_Brain\\GFSX_Brain-48499903.onnx",
+                "reward": 5.400592148796586,
+                "creation_time": 1781560901.843725,
+                "auxillary_file_paths": [
+                    "results\\nvidiarunv10\\GFSX_Brain\\GFSX_Brain-48499903.pt"
+                ]
+            },
+            {
+                "steps": 48999998,
+                "file_path": "results\\nvidiarunv10\\GFSX_Brain\\GFSX_Brain-48999998.onnx",
+                "reward": 5.5090049947936865,
+                "creation_time": 1781561133.9435,
+                "auxillary_file_paths": [
+                    "results\\nvidiarunv10\\GFSX_Brain\\GFSX_Brain-48999998.pt"
+                ]
+            },
+            {
+                "steps": 49499710,
+                "file_path": "results\\nvidiarunv10\\GFSX_Brain\\GFSX_Brain-49499710.onnx",
+                "reward": 5.549516248877864,
+                "creation_time": 1781561367.2591386,
+                "auxillary_file_paths": [
+                    "results\\nvidiarunv10\\GFSX_Brain\\GFSX_Brain-49499710.pt"
+                ]
+            },
+            {
+                "steps": 49999940,
+                "file_path": "results\\nvidiarunv10\\GFSX_Brain\\GFSX_Brain-49999940.onnx",
+                "reward": 5.489220275885115,
+                "creation_time": 1781561599.374071,
+                "auxillary_file_paths": [
+                    "results\\nvidiarunv10\\GFSX_Brain\\GFSX_Brain-49999940.pt"
+                ]
+            },
+            {
+                "steps": 50000161,
+                "file_path": "results\\nvidiarunv10\\GFSX_Brain\\GFSX_Brain-50000161.onnx",
+                "reward": 5.47862874704256,
+                "creation_time": 1781561599.5584483,
+                "auxillary_file_paths": [
+                    "results\\nvidiarunv10\\GFSX_Brain\\GFSX_Brain-50000161.pt"
+                ]
+            }
+        ],
+        "final_checkpoint": {
+            "steps": 50000161,
+            "file_path": "results\\nvidiarunv10\\GFSX_Brain.onnx",
+            "reward": 5.47862874704256,
+            "creation_time": 1781561599.5584483,
+            "auxillary_file_paths": [
+                "results\\nvidiarunv10\\GFSX_Brain\\GFSX_Brain-50000161.pt"
+            ]
+        }
+    },
+    "metadata": {
+        "stats_format_version": "0.3.0",
+        "mlagents_version": "1.1.0",
+        "torch_version": "2.2.2+cu121"
+    }
+}

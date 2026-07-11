@@ -38,11 +38,6 @@ environment_parameters:
       min_value: 0.5
       max_value: 3.0
 
-  ball_max_offset:
-    sampler_type: uniform
-    sampler_parameters:
-      min_value: 0.0
-      max_value: 1.2
 
   episode_length:
     sampler_type: uniform

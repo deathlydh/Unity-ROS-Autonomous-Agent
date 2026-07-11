@@ -42,10 +42,10 @@ public class DiagnosticLogger : MonoBehaviour
         {
             string path = Path.Combine(Application.dataPath, "..", "diagnostic_log.csv");
             writer = new StreamWriter(path, false, Encoding.UTF8);
-            // v18: расширенный заголовок с внутренним состоянием
-            writer.WriteLine("time,step,ballSeen,ballAngle,ballDist,uz,irL,irR,gripIR,camYaw,gas,steering,cameraAction,hasBall,holdTicks,isRetrying,wasClose,blindTicks,ballRecentlySeen,holdWithoutIR,displacementX,displacementZ,heading,speed");
+            // v26: расширенный заголовок с координатами, уверенностью YOLO и PWM моторов
+            writer.WriteLine("time,step,ballSeen,ballAngle,ballDist,uz,irL,irR,gripIR,camYaw,gas,steering,cameraAction,hasBall,holdTicks,isRetrying,wasClose,blindTicks,ballRecentlySeen,holdWithoutIR,displacementX,displacementZ,heading,speed,posX,posZ,yoloConf,bboxW,bboxH,realPwmL,realPwmR");
             startTime = Time.time;
-            Debug.Log($"[DiagnosticLogger] v18 пишу в: {path}");
+            Debug.Log($"[DiagnosticLogger] v26 пишу в: {path}");
         }
     }
 
@@ -60,7 +60,9 @@ public class DiagnosticLogger : MonoBehaviour
         float gas, float steering, float cameraAction,
         bool hasBall, int holdTicks, bool isRetrying, bool wasClose,
         int blindTicks, bool ballRecentlySeen, int holdWithoutIR,
-        float displacementX, float displacementZ, float heading, float speed)
+        float displacementX, float displacementZ, float heading, float speed,
+        float posX, float posZ, float yoloConf, float bboxW, float bboxH,
+        float realPwmL, float realPwmR)
     {
         if (!enableLogging || writer == null || rowsWritten >= maxRows) return;
 
@@ -71,10 +73,11 @@ public class DiagnosticLogger : MonoBehaviour
         // CRITICAL: Используем InvariantCulture! Русская локаль пишет "0,040" (запятая)
         // вместо "0.040" (точка), что ломает CSV (разделитель полей тоже запятая).
         string line = string.Format(CultureInfo.InvariantCulture,
-            "{0:F3},{1},{2},{3:F4},{4:F4},{5:F4},{6},{7},{8},{9:F4},{10:F4},{11:F4},{12:F4},{13},{14},{15},{16},{17},{18},{19},{20:F4},{21:F4},{22:F4},{23:F4}",
+            "{0:F3},{1},{2},{3:F4},{4:F4},{5:F4},{6},{7},{8},{9:F4},{10:F4},{11:F4},{12:F4},{13},{14},{15},{16},{17},{18},{19},{20:F4},{21:F4},{22:F4},{23:F4},{24:F4},{25:F4},{26:F4},{27:F4},{28:F4},{29:F4},{30:F4}",
             elapsed, step, ballSeen?1:0, ballAngle, ballDist, uz, irL, irR, gripIR, camYaw,
             gas, steering, cameraAction, hasBall?1:0, holdTicks, isRetrying?1:0, wasClose?1:0,
-            blindTicks, ballRecentlySeen?1:0, holdWithoutIR, displacementX, displacementZ, heading, speed);
+            blindTicks, ballRecentlySeen?1:0, holdWithoutIR, displacementX, displacementZ, heading, speed,
+            posX, posZ, yoloConf, bboxW, bboxH, realPwmL, realPwmR);
         writer.WriteLine(line);
         writer.Flush();
         rowsWritten++;

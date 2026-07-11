@@ -1,9 +1,9 @@
 # 🤖 GFS-X Ball Grasping — Project Status
 
-> **Последнее обновление**: 2026-06-03
-> **Текущая версия кода**: v18 (фиксы hard-stop + angular deadzone)
-> **Последнее обучение**: nvidiarunv9 (50M шагов, 4.8 часов) — GrabSuccess=85.5%
-> **Статус**: v18 фиксы багов инфраструктуры (EMA, motor ramp, angular deadzone) — тестируем на реальном роботе
+> **Последнее обновление**: 2026-06-16
+> **Текущая версия кода**: v26 (360° spawn, proximity rewards, alignment bonus)
+> **Последнее обучение**: Brain 26 (запущено на основе v26 изменений)
+> **Статус**: Brain 26 обучение завершено, ожидается анализ логов sim + real
 
 ---
 
@@ -12,8 +12,8 @@
 Гусеничный робот **XiaoRGeek GFS-X** (Raspberry Pi 4B) должен **найти мяч в комнате и схватить его клешнёй**. Обучение через **Unity ML-Agents (PPO)** в симуляции, затем перенос на реального робота через ROS 1.
 
 ### Задача агента
-1. **Найти мяч** — может быть где угодно, даже за пределами FOV
-2. **Подъехать к мячу** — не врезаясь в стены
+1. **Найти мяч** — может быть где угодно (360° вокруг робота с v26)
+2. **Подъехать к мячу** — не врезаясь в стены, с замедлением
 3. **Схватить клешнёй** — камера не видит клешню, используется ИК датчик
 4. **Остановиться** — после захвата робот должен стоять и не двигаться
 
@@ -41,6 +41,8 @@
 │                                  ▼                       │
 │  unity_master.py (ROS node)                              │
 │  ├── /cmd_vel → L298N моторы (PWM 0-100%)               │
+│  │   ├── MAX_LINEAR = 0.25 (cap скорости, v26 fix)      │
+│  │   └── TURN_K = 0.30 (коэф. поворота, v26 fix)       │
 │  ├── /cmd_gripper → Сервоприводы MG995 (#1-4)           │
 │  ├── /cmd_camera_pan → Серво камеры (#7)                │
 │  └── /sensor/data → УЗ + ИК (публикация 10 Hz)         │
@@ -53,18 +55,30 @@
 ### Ключевые числа реального робота (из unity_master.py)
 | Параметр | Значение | Где в коде |
 |---|---|---|
-| MAX_SPEED | 0.5 м/с | unity_master.py:57 |
-| MIN_MOTOR_PWM | **35** (мёртвая зона) | unity_master.py:59 |
-| MAX_PWM_STEP | **15** (рампа разгона) | unity_master.py:63 |
-| MAX_CAMERA_STEP | **15°/тик** (серво камеры) | unity_master.py:211 |
-| Sensor poll | **10 Hz** | unity_master.py:301 |
+| MAX_SPEED | 0.5 м/с | unity_master.py |
+| MAX_LINEAR | **0.25** (cap, v26 fix) | unity_master.py |
+| TURN_K | **0.30** (v26 fix, было 0.15) | unity_master.py |
+| MIN_MOTOR_PWM | **35** (мёртвая зона) | unity_master.py |
+| MAX_PWM_STEP | **15** (рампа разгона) | unity_master.py |
+| DEAD_ZONE | **10** (минимальный PWM) | unity_master.py |
+| MAX_CAMERA_STEP | **15°/тик** (серво камеры) | unity_master.py |
+| Sensor poll | **10 Hz** | unity_master.py |
 | Масса | ~2.5 кг | Документация |
-| УЗ датчик | HC-SR04, конус ~30° | Документация |
-| Серво клешни | MG995, 0.17 сек/60° | Документация |
+
+### Motor command pipeline (Real Robot)
+```
+Model: gas ∈ [-1,1], steer ∈ [-1,1]
+  → ROSBridge: linear.x = gas*0.5, angular.z = steer*1.0
+  → vel_callback: linear.x = clamp(linear.x, -0.25, 0.25)  # MAX_LINEAR
+    v_left  = linear.x + angular.z * 0.30  # TURN_K
+    v_right = linear.x - angular.z * 0.30
+  → PWM = int(abs(v) * 200), deadzone=10, min_pwm=35
+  → set_motors_pwm(L, R, dir_L, dir_R)
+```
 
 ---
 
-## 3. Observation Space (15 значений)
+## 3. Observation Space (15 значений × 4 stacked = 60 inputs)
 
 | # | Наблюдение | Тип | Диапазон | Добавлено |
 |---|---|---|---|---|
@@ -85,34 +99,34 @@
 | 14 | Time since ball seen | float | 0..1 | v16 |
 
 **LSTM память**: sequence_length=64, memory_size=256
+**Stacking**: 4 frames × 15 obs = 60 inputs
 
-### Action Space (3 continuous)
+### Action Space (3 continuous + 1 discrete)
 | # | Действие | Диапазон |
 |---|---|---|
 | 0 | Gas (вперёд/назад) | -1..1 |
 | 1 | Steering (лево/право) | -1..1 |
 | 2 | Camera yaw | -1..1 |
+| D0 | Gripper (discrete) | 0=NOOP, 1=CLOSE, 2=OPEN |
 
-**Клешня НЕ в action space** — автоматический захват по ИК датчику.
+**Клешня**: автоматический захват по ИК датчику + discrete action.
 
 ---
 
-## 4. Reward Structure (8 сигналов)
-
-### ⚠️ КРИТИЧЕСКИ ВАЖНО: Только 8 сигналов!
-
-Предыдущие версии (v1-v8) имели 19-27 reward-сигналов, что приводило к дёрганью и нерешительности. **НЕ ДОБАВЛЯЙ новые reward-сигналы без крайней необходимости.**
+## 4. Reward Structure (10 сигналов, v26)
 
 | # | Сигнал | Значение | Зачем | Добавлено |
 |---|---|---|---|---|
-| 1 | **Distance delta** | `delta × 2.0` (оба знака!) | Единственная навигация | v9 |
+| 1 | **Distance delta** | `delta × (2.0 + 4.0×(1-dist))` proximity-scaled | Навигация, сильнее при приближении | v9, **v26 enhanced** |
 | 2 | **Terminal grab** | `+5.0` (при hold ≥ 50 тиков) | Главная цель | v3 |
 | 3 | **Hold per step** | `+0.02/шаг` | Не бросай мяч | v3 |
 | 4 | **Sensor proximity** | `-0.03×sonarProx` и `-0.01×IR` | Избегай стен по ДАТЧИКАМ | v9 |
 | 5 | **Action Rate Penalty** | `-0.05 × ‖aₜ - aₜ₋₁‖²` | Плавность движений | v9 |
 | 6 | **Mild reverse penalty** | `-0.005` (gas<-0.1, не retry, не у стены) | Не езди назад без причины | v15 |
 | 7 | **Proximity slow-down** | `+0.005` (dist<0.3, gas 0.01-0.3) | Замедляйся перед мячом | v15 |
-| 8 | **Blind crawl** | `+0.003` (wasClose, gas 0.01-0.3) | Ползи вперёд в слепой зоне | v15 |
+| 8 | **Speed penalty near ball** | `-0.01` (dist<0.25, \|gas\|>0.4) | Не таранить мяч | **v26** |
+| 9 | **Alignment bonus** | `+0.005` (dist<0.4, \|angle\|<0.15) | Центрируйся перед захватом | **v26** |
+| 10 | **Blind crawl** | `+0.003` (wasClose, gas 0.01-0.3) | Ползи вперёд в слепой зоне | v15 |
 
 ### Что УБРАНО (и почему НЕ НАДО возвращать)
 - ❌ OnCollisionEnter wall penalty — на реальном роботе нет коллизий, только датчики
@@ -123,7 +137,26 @@
 
 ---
 
-## 5. Sim-to-Real механизмы
+## 5. Ball Spawning (v26 — 360°)
+
+```csharp
+// ResetBall() — мяч спавнится в ЛЮБОМ направлении вокруг робота
+float spawnAngle = Random.Range(0f, 360f);
+float spawnDist = Random.Range(0.5f, maxDist);
+Vector3 direction = Quaternion.Euler(0f, spawnAngle, 0f) * Vector3.forward;
+randomPos = transform.position + direction * spawnDist;
+```
+
+Проверки валидности:
+- OverlapSphere(0.15m) — не спавнится в стенах/объектах (Tag: Wall/Obstacle)
+- Raycast вниз — проверяет наличие пола (не за границей арены)
+- 30 попыток → fallback перед роботом
+
+**Было (до v26):** `transform.forward * randomZ + transform.right * randomX` — только перед роботом.
+
+---
+
+## 6. Sim-to-Real механизмы
 
 ### SimulatedYoloCamera.cs (v17)
 - **Проекция камеры**: Camera.WorldToViewportPoint() → идентично YOLO
@@ -135,23 +168,10 @@
 - **Debounce**: 0.3s (имитация BoT-SORT трекера YOLO)
 
 ### В симуляции (TrackController.cs)
-- **Мёртвая зона**: `motorDeadzone = 0.35` (реальный MIN_MOTOR_PWM=35 — матчит!)
-- **Angular deadzone**: v18 — применяется и к повороту (раньше только linear)
+- **Мёртвая зона**: `motorDeadzone = 0.35` (реальный MIN_MOTOR_PWM=35)
+- **Angular deadzone**: v18 — 0.15 (мягче чем linear)
 - **Рампа ускорения**: `maxAccelPerStep = 0.15` (реальный MAX_PWM_STEP=15)
 - **Инерция**: `linearDamping = 8`
-
-### В симуляции (RobotBrain.cs)
-- **Camera step limit**: макс 15°/тик (реальный MAX_CAMERA_STEP)
-- **Burst dropout**: YOLO теряет мяч на 3-8 кадров подряд (не покадрово)
-- **Раздельный шум**: angle ±noiseAmp, distance ±noiseAmp×3
-- **Стартовая ротация**: ±180°
-- **Latency**: 2-5 шагов задержки действий, 1 шаг задержки сенсоров
-
-### В симуляции (VirtualSensors.cs)
-- **Конусный УЗ**: 5 лучей (0°, ±7°, ±15°) — матчит HC-SR04 конус 30°
-
-### На реальном роботе (ROSBridge.cs)
-- **EMA smoothing**: `α=0.8` на командах перед отправкой в ROS
 
 ### Domain Randomization (config.yaml)
 | Параметр | Диапазон |
@@ -160,14 +180,19 @@
 | turnSpeed | 80 - 160 |
 | smoothing | 0.01 - 0.25 |
 | mass | 1.0 - 4.0 |
+| ball_max_distance | 0.5 - 3.0 |
 | ball_scale | 0.04 - 0.07 (×Random ±20%) |
 | ball_mass | 0.05 - 0.2 |
 | vision_noise | 0.02 - 0.06 |
 | vision_dropout | 0.05 - 0.15 |
+| episode_length | 1500 (фиксированный) |
+| Стартовая ротация | ±180° |
+| Action latency | 2-5 шагов |
+| Sensor latency | 1 шаг |
 
 ---
 
-## 6. Training Config (config.yaml)
+## 7. Training Config (config.yaml)
 
 - **Trainer**: PPO
 - **Network**: 256 hidden × 2 layers + LSTM (64 seq, 256 mem)
@@ -176,38 +201,12 @@
 - **Decision Period**: 5 (в Inspector DecisionRequester, не в yaml)
 - **Max steps**: 50M
 - **Parallel**: 40 комнат × 16 envs = **640 агентов**
-- **Environment params**: ball_max_distance (0.5-3.0), ball_max_offset (0-1.2), episode_length (1500)
+- **Environment params**: ball_max_distance (0.5-3.0), episode_length (1500)
 
 ### Команда запуска
 ```bash
-mlagents-learn config.yaml --run-id=v17run --env=Buildv22/ROS_test.exe --num-envs=16 --no-graphics --env-args -logFile NUL
+mlagents-learn config.yaml --run-id=<name> --env=Buildv30/ROS_test.exe --num-envs=16 --no-graphics
 ```
-
----
-
-## 7. Логика клешни (v17)
-
-### Автоматический захват (не через action space)
-```
-ИК сработал (gripperIR=1)?
-├── Мяч был виден камерой за последнюю 1 сек? (ballRecentlySeen)
-│   ├── ДА → CloseGripper → hasBall=true → РОБОТ СТОИТ
-│   │       └── ИК потом пропал?
-│   │           └── Ждём 2 сек → если не вернулся → OpenGripper
-│   └── НЕТ → Ложное срабатывание (стул, стена) → клешню ОТКРЫТЬ
-└── В тренировке: всегда разрешаем (мяч гарантированно есть)
-```
-
-### GripperController.cs (v17)
-- **CloseGripper**: в симуляции ищет Unity-объект мяча; на реальном роботе (`useRealSensors=true`) → `hasBall=true` напрямую по ИК
-- **OpenGripper**: корректно работает и в симуляции, и на реале (даже без grabbedBall)
-- **Авто-захват**: Update() вызывает CloseGripper() когда gripperIR=1
-
-### RobotBrain.cs gripper logic (v17)
-- **allowGrip**: `isTraining || ballRecentlySeen` — клешня НЕ закроется на стул
-- **holdWithoutIR**: 100 тиков (2 сек) — анти-дребезг ИК при сдвиге мяча
-- **hasBall=true**: робот стоит, PublishCommand(0,0), PublishGripperCmd(2)
-- **holdTicks ≥ 50**: при тренировке → +5.0 reward + EndEpisode
 
 ---
 
@@ -220,20 +219,31 @@ mlagents-learn config.yaml --run-id=v17run --env=Buildv22/ROS_test.exe --num-env
 | v6 | Dense rewards (19 сигналов) | Дёрганье на реальном роботе |
 | v7 | Упрощение (неудачное) | Робот ехал только назад |
 | v8 | Восстановление v4-v5 логики | Частично работало |
-| v9 | NVIDIA overhaul: 5 rewards, motor model, cone UZ, EMA | GrabSuccess=0.45, curriculum регрессия |
+| v9 | NVIDIA overhaul: 5 rewards, motor model, cone UZ, EMA | GrabSuccess=0.45 |
 | v10 | Fixed DR (без curriculum), blind crawl | GrabSuccess=0.50, реал: задний ход |
 | v11 | Reverse penalty, diagnostics | Sim стабильно, реал: задний ход |
-| v12 | **FIX: `pwm_left = -pwm_left`** | Левый мотор инвертирован! Все v6-v11 были бесполезны |
-| v13 | SimulatedYoloCamera, vision_dropout 5-15% | YOLO-идентичные наблюдения |
-| v14-v16 | Camera FOV фикс, EMA 0.8, sim log анализ | GrabSuccess=84%, но ballSeen=0% при inference! |
-| **v17** | **Camera init order, auto ballRadius, hasBall для реала, smart gripper, автопоиск мяча** | **nvidiarunv9: GrabSuccess=85.5%, Reward=5.27** |
-| **v18** | **Hard-stop EMA (ROSBridge), hard-stop ramp (unity_master), angular deadzone (TrackController)** | **Фиксы инфраструктуры, не требуют переобучения** |
+| v12 | **FIX: `pwm_left = -pwm_left`** | Левый мотор инвертирован! |
+| v13 | SimulatedYoloCamera, vision_dropout | YOLO-идентичные наблюдения |
+| v14-v16 | Camera FOV фикс, EMA 0.8, sim log | GrabSuccess=84%, но ballSeen=0% при inference! |
+| **v17** | **Camera init, auto ballRadius, hasBall реал, smart gripper** | **GrabSuccess=85.5%, Reward=5.27** |
+| **v18** | **Hard-stop EMA, angular deadzone** | **Инфра фиксы, без переобучения** |
+| **v26** | **360° spawn, proximity-scaled reward, speed penalty, alignment bonus, TURN_K fix, MAX_LINEAR cap** | **Обучение завершено, анализ pending** |
 
-> **⚠️ КРИТИЧЕСКАЯ НАХОДКА (v12)**: Робот "ехал назад" не из-за плохой политики, а из-за инвертированного мотора. Фикс: `pwm_left = -pwm_left` в `unity_master.py`.
+### ONNX Reverse Engineering (Brain 8 vs Brain 25)
+**Brain 8** (71K params, 10obs×4stack): правильный speed-distance scaling (gas 1.0→-0.06), задний ход при потере мяча. Но нет egocentric features, нет поиска по lastKnownDir.
 
-> **⚠️ КРИТИЧЕСКАЯ НАХОДКА (v16)**: Все модели v13-v16 обучены с БИТОЙ камерой: FOV=26° вместо 30.5°, ballRadius=0.03 хардкод при ball_scale=0.04-0.07, ballSeen=0% при inference. v17 всё исправлен.
+**Brain 25** (280K params, 15obs×4stack): плоская кривая gas vs dist (0.49→0.21), нет заднего хода при потере. Лучше blind search (использует lastKnownDir). Gripper discrete спамит CLOSE.
 
-> **⚠️ КРИТИЧЕСКАЯ НАХОДКА (v18)**: Робот "крутился после захвата" не из-за плохой политики, а из-за цепочки багов: EMA-остатки в ROSBridge → MIN_MOTOR_PWM бустил PWM=6 до 35 → робот крутился на PWM=35. Фикс: hard-stop override в ROSBridge + unity_master + angular deadzone в TrackController.
+**Вывод**: Brain 25 потеряла precision при подъезде, но улучшила поиск. Brain 26 rewards должны вернуть precision.
+
+### Motor Pipeline Fixes (v26, unity_master.py)
+- **TURN_K**: 0.15 → **0.30** — при steer=0.2 + gas=0.3 разница PWM была 6 (мёртвая зона), стала 12 (работает)
+- **MAX_LINEAR**: 0.25 — cap скорости 50%, модель не проезжает мимо мяча
+
+> ⚠️ **КРИТИЧЕСКАЯ НАХОДКА (v12)**: Робот «ехал назад» из-за инвертированного мотора.
+> ⚠️ **КРИТИЧЕСКАЯ НАХОДКА (v16)**: Модели v13-v16 обучены с БИТОЙ камерой.
+> ⚠️ **КРИТИЧЕСКАЯ НАХОДКА (v18)**: Робот «крутился после захвата» из-за EMA-остатков.
+> ⚠️ **КРИТИЧЕСКАЯ НАХОДКА (v26)**: Brain 25 потеряла dynamic speed control — TURN_K=0.15 делал тонкие команды модели бесполезными.
 
 ---
 
@@ -243,24 +253,26 @@ mlagents-learn config.yaml --run-id=v17run --env=Buildv22/ROS_test.exe --num-env
 ```
 C:\Users\Admin\Unity\ROS_test\
 ├── Assets/
-│   ├── RobotBrain.cs          ← ML-Agent (reward, observations, actions)
+│   ├── RobotBrain.cs          ← ML-Agent (reward, observations, actions, 360° spawn)
 │   ├── SimulatedYoloCamera.cs ← YOLO-идентичное зрение для тренировки (v17)
 │   ├── RealVision.cs          ← YOLO зрение для инференса
 │   ├── TrackController.cs     ← Физика моторов (deadzone, ramp, damping)
 │   ├── VirtualSensors.cs      ← УЗ конус + ИК (рейкасты или ROS)
 │   ├── GripperController.cs   ← Авто-захват по ИК (v17: работает на реале)
 │   ├── ROSBridge.cs           ← ROS коммуникация + EMA 0.8
+│   ├── OnnxSuccessful/        ← Сохранённые модели (Brain 8, Brain 25)
 │   └── VirtualCamera.cs       ← УСТАРЕЛ, НЕ ИСПОЛЬЗУЕТСЯ
 ├── config.yaml                ← PPO + DR параметры
-├── sim_log.csv                ← Логи цифрового робота
-├── real_log.csv               ← Логи реального робота
-└── PROJECT_STATUS.md          ← ЭТОТ ФАЙЛ
+├── PROJECT_STATUS.md          ← ЭТОТ ФАЙЛ
+├── BUG_RETROSPECTIVE.md       ← История багов
+├── TODO.md                    ← Задачи
+└── V17_CHANGES.md             ← Лог изменений v17
 ```
 
 ### Raspberry Pi (R:\)
 ```
 R:\ (home директория pi@raspberrypi)
-├── unity_master.py            ← Главный ROS node (моторы, серво, сенсоры)
+├── unity_master.py            ← Главный ROS node (TURN_K=0.30, MAX_LINEAR=0.25)
 ├── unity_gripper_ir.py        ← ИК клешни (20 Hz)
 ├── start_robot.sh             ← Запуск Docker + ROS nodes
 └── XiaoRGeek/                 ← Драйверы GPIO/моторов/серво
@@ -271,15 +283,14 @@ R:\ (home директория pi@raspberrypi)
 ## 10. Правила для AI-ассистента
 
 ### 🔴 НЕ ДЕЛАЙ
-1. **НЕ добавляй reward-сигналы** — 5 сигналов это осознанное решение
-2. **НЕ возвращай `rb.linearVelocity = Vector3.zero`** — убивает инерцию
-3. **НЕ возвращай OnCollisionEnter для стен** — нет коллизий на реальном роботе
-4. **НЕ меняй observation space без веской причины** — ломает модели
-5. **НЕ добавляй curiosity reward** — конфликтует с dense reward
-6. **НЕ убирай EMA smoothing** — без него реальный робот трясётся
-7. **НЕ убирай мёртвую зону мотора** — мотор не крутится при PWM<20
-8. **НЕ добавляй шум/dropout при inference** — реальный YOLO и так шумит
-9. **НЕ меняй track speed при inference** — реальная скорость определяется моторами
+1. **НЕ возвращай `rb.linearVelocity = Vector3.zero`** — убивает инерцию
+2. **НЕ возвращай OnCollisionEnter для стен** — нет коллизий на реальном роботе
+3. **НЕ меняй observation space без веской причины** — ломает модели
+4. **НЕ добавляй curiosity reward** — конфликтует с dense reward
+5. **НЕ убирай EMA smoothing** — без него реальный робот трясётся
+6. **НЕ убирай мёртвую зону мотора** — мотор не крутится при PWM<20
+7. **НЕ добавляй шум/dropout при inference** — реальный YOLO и так шумит
+8. **НЕ меняй track speed при inference** — реальная скорость определяется моторами
 
 ### 🟢 ДЕЛАЙ
 1. **Спрашивай метрики TensorBoard** перед изменениями
@@ -287,5 +298,6 @@ R:\ (home директория pi@raspberrypi)
 3. **Меняй по одному параметру** — иначе непонятно что помогло
 4. **Сохраняй чекпоинты** — checkpoint_interval=500000
 5. **Проверяй Inspector** — код может задать значение, но Inspector перезапишет
-6. **Анализируй sim_log.csv и real_log.csv** — сравнивай ballSeen, gas, steering
-7. **Слушай пользователя** — если он говорит "клешня не разжимается", не пиши что разжимается
+6. **Анализируй diagnostic_log** — сравнивай ballSeen, gas, steering, dist
+7. **Слушай пользователя** — если он говорит «клешня не разжимается», не пиши что разжимается
+8. **Используй ONNX reverse engineering** — скрипты `onnx_behavior.py`, `compare_models.py` уже готовы

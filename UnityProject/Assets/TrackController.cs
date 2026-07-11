@@ -15,21 +15,29 @@ public class TrackController : MonoBehaviour
     [Tooltip("Инерция разгона (0 = мгновенно, 1 = бесконечно)")]
     public float smoothing = 0.05f;
 
-    [Header("Sim-to-Real: Motor Model")]
-    [Tooltip("Мёртвая зона мотора (реальный MIN_MOTOR_PWM=35 → 0.35). Мотор не крутится при PWM ниже этого порога.")]
-    [Range(0f, 0.5f)]
-    public float motorDeadzone = 0.35f;
+    [Header("Sim-to-Real: Motor Pipeline")]
+    [Tooltip("Коэффициент смешивания угловой скорости (0.30 - реальный робот)")]
+    public float turnK = 0.30f;
 
-    [Tooltip("Макс изменение скорости за шаг (реальный MAX_PWM_STEP=15/100=0.15). Ограничивает ускорение.")]
-    [Range(0.01f, 1f)]
-    public float maxAccelPerStep = 0.15f;
+    [Tooltip("Ограничение линейной скорости cmd (0.25 - реальный робот)")]
+    public float maxLinearCmd = 0.25f;
+
+    [Tooltip("Мертвая зона мотора в PWM (10% - реальный робот)")]
+    public float motorDeadzone = 10f;
+
+    [Tooltip("Минимальный PWM буст (35% - реальный робот)")]
+    public float minMotorPwm = 35f;
+
+    [Tooltip("Максимальный шаг PWM за тик 20мс (15 - реальный робот)")]
+    public float maxPwmStep = 15f;
 
     private Rigidbody rb;
     private float targetLinear = 0f;
     private float targetAngular = 0f;
-    private float smoothLinear = 0f;
-    private float smoothAngular = 0f;
-    private float prevSmooth = 0f; // Для рампы ускорения
+    
+    // PWM значения левого/правого бортов (0-100)
+    [HideInInspector] public float pwmLeft = 0f;
+    [HideInInspector] public float pwmRight = 0f;
 
     void Start()
     {
@@ -41,7 +49,6 @@ public class TrackController : MonoBehaviour
         // Рекомендуемые настройки для стабильности
         rb.interpolation = RigidbodyInterpolation.Interpolate;
         rb.collisionDetectionMode = CollisionDetectionMode.Continuous;
-        // linearDamping гасит инерцию вместо обнуления velocity
         rb.linearDamping = 8f;
         rb.angularDamping = 10f;
     }
@@ -57,42 +64,54 @@ public class TrackController : MonoBehaviour
 
     void FixedUpdate()
     {
-        // 1. Сглаживание входов (инерция)
-        float t = 1f - smoothing;
-        smoothLinear = Mathf.Lerp(smoothLinear, targetLinear, t);
-        smoothAngular = Mathf.Lerp(smoothAngular, targetAngular, t);
+        // 1. Масштабируем входы в физические скорости cmd_vel (как в ROSBridge)
+        float lin_x = Mathf.Clamp(targetLinear * 0.5f, -maxLinearCmd, maxLinearCmd);
+        float ang_z = targetAngular * 1.0f; // max angular velocity = 1.0 rad/s
 
-        // 2. МЁРТВАЯ ЗОНА: реальный мотор не крутится при PWM < MIN_MOTOR_PWM (35%)
-        // Агент должен выучить что слабый газ = стоять на месте
-        float effectiveLinear = smoothLinear;
-        if (Mathf.Abs(effectiveLinear) < motorDeadzone)
-            effectiveLinear = 0f;
+        // 2. Смешивание скоростей гусениц
+        float v_left = lin_x + (ang_z * turnK);
+        float v_right = lin_x - (ang_z * turnK);
 
-        // v18 FIX: Angular deadzone — без неё smoothAngular=0.05 × turnSpeed=120 = 6°/сек = заметное кручение.
-        // ВАЖНО: порог 0.15 (мягче чем linear=0.35), т.к. модель обучена БЕЗ angular deadzone
-        // и даёт мелкие коррекции (0.2-0.3). Deadzone 0.35 убивает всё рулевое управление!
-        if (Mathf.Abs(smoothAngular) < 0.15f)
-            smoothAngular = 0f;
+        // 3. Конвертация в PWM (коэффициент 200)
+        float targetPwmL = v_left * 200f;
+        float targetPwmR = v_right * 200f;
 
-        // 3. РАМПА УСКОРЕНИЯ: реальный MAX_PWM_STEP = 15 из 100 за тик
-        // Ограничиваем скорость нарастания чтобы агент учился плавному управлению
-        float delta = effectiveLinear - prevSmooth;
-        if (Mathf.Abs(delta) > maxAccelPerStep)
-        {
-            effectiveLinear = prevSmooth + Mathf.Sign(delta) * maxAccelPerStep;
-        }
-        prevSmooth = effectiveLinear;
+        // 4. Мягкий старт (maxPwmStep за тик 20мс)
+        float deltaL = targetPwmL - pwmLeft;
+        if (Mathf.Abs(deltaL) > maxPwmStep)
+            pwmLeft += Mathf.Sign(deltaL) * maxPwmStep;
+        else
+            pwmLeft = targetPwmL;
 
-        // 4. Поворот (Y-вращение)
-        float yawDelta = smoothAngular * turnSpeed * Time.fixedDeltaTime;
+        float deltaR = targetPwmR - pwmRight;
+        if (Mathf.Abs(deltaR) > maxPwmStep)
+            pwmRight += Mathf.Sign(deltaR) * maxPwmStep;
+        else
+            pwmRight = targetPwmR;
+
+        // 5. Двухступенчатая мертвая зона (Deadzone и Boost)
+        float absL = Mathf.Abs(pwmLeft);
+        float effectiveL = 0f;
+        if (absL >= motorDeadzone)
+            effectiveL = absL < minMotorPwm ? minMotorPwm : absL;
+        effectiveL *= Mathf.Sign(pwmLeft);
+
+        float absR = Mathf.Abs(pwmRight);
+        float effectiveR = 0f;
+        if (absR >= motorDeadzone)
+            effectiveR = absR < minMotorPwm ? minMotorPwm : absR;
+        effectiveR *= Mathf.Sign(pwmRight);
+
+        // 6. Совмещенная кинематика (вращение + смещение вперед)
+        float physicalLinearSpeed = ((effectiveL + effectiveR) / 2f) / 100f * moveSpeed;
+        float physicalAngularSpeed = ((effectiveL - effectiveR) / 2f) / 100f * turnSpeed;
+
+        // Двигаем Rigidbody
+        float yawDelta = physicalAngularSpeed * Time.fixedDeltaTime;
         Quaternion newRot = rb.rotation * Quaternion.Euler(0f, yawDelta, 0f);
         rb.MoveRotation(newRot);
 
-        // 5. Перемещение (Вперед/Назад)
-        Vector3 move = transform.forward * (effectiveLinear * moveSpeed);
+        Vector3 move = transform.forward * physicalLinearSpeed;
         rb.MovePosition(rb.position + move * Time.fixedDeltaTime);
-
-        // 6. НЕ обнуляем velocity — пусть linearDamping = 8 гасит инерцию естественно
-        // Это даёт реалистичное проскальзывание при торможении (реальный робот 2.5 кг)
     }
 }

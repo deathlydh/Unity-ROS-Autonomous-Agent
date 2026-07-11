@@ -59,6 +59,10 @@ public class VirtualSensors : MonoBehaviour
     private int _realRightIR = 0;
     private int _realGripperIR = 0;
 
+    [Header("Real Robot PWM (from ROS)")]
+    public float realPwmLeft = 0f;
+    public float realPwmRight = 0f;
+
     [HideInInspector]
     public GameObject lastGripperHitObj = null;
 
@@ -69,6 +73,8 @@ public class VirtualSensors : MonoBehaviour
         ros.Subscribe<QuaternionMsg>("/sensor/data", SensorCallback);
         // Отдельный топик для ИК датчика клешни (unity_gripper_ir.py)
         ros.Subscribe<Int32Msg>("/sensor/gripper_ir", GripperIRCallback);
+        // Топик для считывания реального PWM моторов робота
+        ros.Subscribe<Vector3Msg>("/sensor/pwm", PwmCallback);
     }
 
     void SensorCallback(QuaternionMsg msg)
@@ -92,6 +98,12 @@ public class VirtualSensors : MonoBehaviour
         _realGripperIR = msg.data;
         if (_realGripperIR == 1)
             Debug.Log("[VirtualSensors] 🎯 GRIPPER IR = 1 — мяч в клешне!");
+    }
+
+    void PwmCallback(Vector3Msg msg)
+    {
+        realPwmLeft = (float)msg.x;
+        realPwmRight = (float)msg.y;
     }
 
     void FixedUpdate()

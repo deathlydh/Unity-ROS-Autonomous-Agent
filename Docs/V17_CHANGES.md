@@ -1,7 +1,7 @@
 # 🔧 v17 Changes & Known Issues
 
 > **Дата**: 2026-06-01
-> **Статус**: Все фиксы применены, нужно переобучить
+> **Статус**: Обучение v17 проведено (nvidiarunv9, GrabSuccess=85.5%). Версия УСТАРЕЛА, заменена v26.
 
 ---
 
@@ -20,12 +20,10 @@
 ### 3. SimulatedYoloCamera.cs — Автопоиск мяча по тэгу
 **Было**: targetBall назначался только через RobotBrain → при inference без ballPrefab = NULL
 **Стало**: если targetBall==null, ищет GameObject.FindGameObjectWithTag("TargetBall")
-**Почему**: Пользователь тестирует inference, кидая мяч вручную на сцену
 
 ### 4. GripperController.cs — hasBall на реальном роботе
 **Было**: CloseGripper() ищет Unity-объект мяча → на реале grabbedBall=null → hasBall=false ВСЕГДА
 **Стало**: если `useRealSensors && gripperIR==1 && grabbedBall==null` → `hasBall=true` напрямую
-**Почему**: Без этого робот никогда не останавливался после захвата
 
 ### 5. GripperController.cs — OpenGripper для реала
 **Было**: `if (hasBall && grabbedBall != null)` → на реале hasBall не сбрасывался
@@ -34,51 +32,49 @@
 ### 6. RobotBrain.cs — Умная клешня (ballRecentlySeen)
 **Было**: `if (!hasBall && gripperSensorActive)` → хватал всё подряд (стулья, стены)
 **Стало**: `if (!hasBall && gripperSensorActive && allowGrip)` где `allowGrip = isTraining || ballRecentlySeen`
-**Почему**: Ложные срабатывания ИК от ножек стульев → клешня закрывалась на весь эпизод
 
 ### 7. RobotBrain.cs — Анти-дребезг ИК (holdWithoutIR)
 **Было**: `if (hasBall && !gripperSensorActive)` → `OpenGripper()` мгновенно
 **Стало**: `holdWithoutIR++` → ждём 100 тиков (2 сек) → потом OpenGripper
-**Почему**: Мяч сдвигается в клешне → ИК теряет → клешня разжималась мгновенно
 
 ### 8. ROSBridge.cs — EMA 0.8
 **Было**: `emaAlpha = 0.4`
 **Стало**: `emaAlpha = 0.8`
-**Почему**: Более отзывчивое управление, 0.4 слишком сглаживал
 
 ---
 
-## Известные проблемы (НЕ починены)
+## v18 Changes (2026-06-03) — инфраструктурные фиксы
 
-### 🟡 motorDeadzone = 0.35 vs реальный MIN_MOTOR_PWM = 20
-В `TrackController.cs` стоит deadzone 0.35 (от старого значения PWM=35). Реальный робот теперь использует `MIN_MOTOR_PWM = 20`. Возможно нужно уменьшить deadzone до `0.20`, но это требует тестирования.
+### 1. ROSBridge.cs — Hard-stop EMA override
+Если gas=0 и steer=0, EMA сбрасывается в 0 мгновенно (без остатков).
 
-### 🟡 Inference не ресетит эпизоды
-При `isTraining=false` нет `EndEpisode()` ни по таймауту, ни по success. LSTM-state может деградировать. Возможное решение: периодический soft reset observation history.
+### 2. unity_master.py — Hard-stop ramp override
+Если целевой PWM=0, PWM обнуляется мгновенно (без плавного снижения).
 
-### 🟡 Inference не имеет latency
-Обучение идёт с latency 2-5 шагов, inference без latency. Модель обучена компенсировать задержку, при мгновенном исполнении может перестреливать. Но на реальном роботе ROS вносит естественную задержку.
-
-### 🟡 Config: ball_max_distance 0.5-3.0
-Возможно диапазон слишком мал. Реальная комната ~5м. Но curriculum поднимает дистанцию постепенно.
+### 3. TrackController.cs — Angular deadzone 0.15
+Smoothed angular < 0.15 → angular = 0. Мягче чем linear (0.35), т.к. модель даёт тонкие steer-коррекции.
 
 ---
 
-## Что проверить после обучения v17
+## v26 Changes (2026-06-15) — переобучение Brain 26
 
-1. **Console лог при запуске**:
-   ```
-   [SimulatedYoloCamera] Initialized: FOV=30.5° (hFOV=40°), aspect=1.33, ...
-   [SimulatedYoloCamera] targetBall найден автоматически: TargetBall_Instance
-   ```
+### Motor pipeline fixes (unity_master.py)
+1. **TURN_K**: 0.15 → **0.30** — усиление дифференциала поворота
+2. **MAX_LINEAR**: **0.25** — cap скорости (50%) чтобы не проезжать мимо мяча
 
-2. **TensorBoard**: GrabSuccess должен быть ≥0.7
+### RobotBrain.cs — 360° ball spawning
+**Было**: `transform.forward * randomZ + transform.right * randomX` (только перед роботом)
+**Стало**: `Quaternion.Euler(0, Random.Range(0,360), 0) * Vector3.forward * spawnDist` (любое направление)
+- Добавлена проверка Raycast вниз (наличие пола — не за границей арены)
+- OverlapSphere проверка стен/объектов сохранена
 
-3. **sim_log.csv**: ballSeen должен быть >0% (раньше был 0%!)
+### RobotBrain.cs — Reward system (4 изменения)
+1. **Distance delta proximity-scaled**: `distDelta * 2.0` → `distDelta * (2.0 + 4.0*(1-dist))` — множитель 2x→6x
+2. **Speed penalty (NEW)**: `-0.01` при dist<0.25 и |gas|>0.4 — не таранить мяч
+3. **Alignment bonus (NEW)**: `+0.005` при dist<0.4 и |angle|<0.15 — центрировка
+4. Slow-down bonus (v15) сохранён без изменений
 
-4. **Цифровой инференс**: робот должен ехать к мячу, а не кружиться
-
-5. **Реальный робот**:
-   - Захват мяча → робот СТОИТ (hasBall=true → track.Move(0,0))
-   - Ножка стула → клешня НЕ закрывается (ballRecentlySeen=false)
-   - Console: `[RobotBrain] Захват: gripperIR=1, ballRecentlySeen=True`
+### config.yaml
+- Удалён `ball_max_offset` (не нужен с 360° спавном)
+- `ball_max_distance`: 0.5 - 3.0 (без изменений)
+- `episode_length`: 1500 (без изменений)
